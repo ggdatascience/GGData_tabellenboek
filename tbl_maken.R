@@ -12,7 +12,7 @@ rm(list=ls())
 
 # benodigde packages installeren als deze afwezig zijn
 pkg_nodig = c("tidyverse", "survey", "haven", "this.path",
-              "labelled", "openxlsx")
+              "labelled", "openxlsx", "doParallel")
 
 for (pkg in pkg_nodig) {
   if (system.file(package = pkg) == "") {
@@ -26,6 +26,7 @@ library(haven)
 library(this.path)
 library(labelled)
 library(openxlsx)
+suppressPackageStartupMessages(library(doParallel))
 
 # instellen werkmap voor het laden van de andere bestanden
 setwd(dirname(this.path()))
@@ -36,9 +37,10 @@ source("tbl_helpers.R")
   # selecteren configuratiebestand en bijbehorende werkmap
   # hierin dienen de configuratie(.xlsx) en de databestanden (in de map data) te staan
   # andere mappen worden automatisch aangemaakt als deze niet bestaan
-  config.file = choose.files(caption="Selecteer configuratiebestand...",
-                             filters=c("Excel-bestand (*.xlsx)","*.xlsx"),
-                             multi=F)
+  #config.file = choose.files(caption="Selecteer configuratiebestand...",
+  #                           filters=c("Excel-bestand (*.xlsx)","*.xlsx"),
+  #                           multi=F)
+  config.file = "configuratie.xlsx"
   if (!str_ends(config.file, ".xlsx")) msg("Configuratiebestand dient een Excel-bestand te zijn.", ERR)
   setwd(dirname(config.file))
   
@@ -53,8 +55,13 @@ source("tbl_helpers.R")
   if (!exists("tmp")) msg("Configuratiebestand kon niet gelezen worden. Wellicht is deze nog geopend in Excel?", ERR)
   rm(tmp)
   
+  # zorgen dat de juiste mappen bestaan
+  if (!dir.exists("output")) dir.create("output")
+  if (!dir.exists("resultaten_csv")) dir.create("resultaten_csv")
+  
   # daadwerkelijk inlezen configuratie
-  sheets = c("crossings", "datasets", "indeling_rijen", "onderdelen")
+  # TODO: onmogelijke waardes checken
+  sheets = c("algemeen", "crossings", "datasets", "indeling_rijen", "onderdelen")
   for (sheet in sheets) {
     tmp = read.xlsx(config.file, sheet=sheet)
     if (ncol(tmp) == 1) tmp = tmp[[1]]
@@ -67,9 +74,21 @@ source("tbl_helpers.R")
   varlist = indeling_rijen$inhoud[indeling_rijen$type %in% c("var", "nvar")]
   varlist = unique(varlist[!is.na(varlist)])
   
+  if (any(crossings %in% onderdelen$subset)) {
+    msg("De variabele(n) %s is/zijn ingevuld als crossing en subset. Een subset kan niet met zichzelf gekruist worden.",
+        str_c(crossings[crossings %in% onderdelen$subset], ", "), level=WARN)
+  }
+  
   # datasets combineren en de strata en weegfactoren apart opslaan
   data.combined = data.frame()
   for (d in 1:nrow(datasets)) {
+    msg("Inladen dataset %d: %s", d, datasets$naam_dataset[d], level=MSG)
+    
+    # .sav aan het einde kan vergeten worden...
+    if (!str_ends(datasets$bestandsnaam[d], fixed(".sav"))) {
+      msg("De opgegeven dataset op rij %d eindigt niet in .sav. Mogelijk vergeten? .sav toegevoegd.", level=WARN, d+1)
+    }
+    
     data = read_spss(datasets$bestandsnaam[d], user_na=T) %>% user_na_to_na()
     
     # afwijkende kolommen registreren zodat we deze later kunnen scheiden
@@ -83,6 +102,18 @@ source("tbl_helpers.R")
         next
       }
       
+      # gewichten apart opslaan
+      if (!is.na(datasets$weegfactor[d]) && colname == datasets$weegfactor[d]) {
+        colnames(data)[c] = "tbl_weegfactor"
+        next
+      }
+      
+      # jaren apart opslaan
+      if (!is.na(datasets$jaarvariabele[d]) && colname == datasets$jaarvariabele[d]) {
+        colnames(data)[c] = "tbl_jaar"
+        next
+      }
+      
       if (colname %in% colnames(data.combined)) {
         existing = data.combined[[which(colnames(data.combined) == colname)]]
         # controleren of het type en, indien relevant, factors overeenkomen
@@ -93,8 +124,20 @@ source("tbl_helpers.R")
     }
     
     # herschrijven kolomnamen zodat ze niet gaan storen
-    msg("Afwijkende kolommen: %s", str_c(colnames(data)[afwijkend], collapse=","))
+    msg("Afwijkende kolommen in dataset %d: %s", d, str_c(colnames(data)[afwijkend], collapse=","))
     if (length(afwijkend) > 0) colnames(data)[afwijkend] = paste0("_", d, "_", colnames(data)[afwijkend])
+    
+    # zijn er weegfactoren aangetroffen? zo nee, is dat de bedoeling?
+    if (!("tbl_weegfactor" %in% colnames(data))) {
+      if (is.na(datasets$weegfactor[d]) && is.na(datasets$stratum[d])) {
+        # geen stratum en weegfactor opgegeven; alles invullen met 1
+        data$tbl_weegfactor = rep(1, nrow(data))
+        data$tbl_strata = rep(1, nrow(data))
+      } else {
+        msg("Kolom %s of %s is niet aangetroffen in dataset %d (%s). Laat voor een ongewogen design beide velden leeg of pas de dataset aan.",
+            datasets$weegfactor[d], datasets$stratum[d], d, datasets$naam_dataset[d], level=ERR)
+      }
+    }
     
     data[,"tbl_dataset"] = d
     data.combined = bind_rows(data.combined, data)
@@ -111,7 +154,7 @@ source("tbl_helpers.R")
   # dummies maken
   for (c in 1:ncol(data)) {
     colname = colnames(data)[c]
-    if (!(colname %in% varlist)) next
+    if (!(colname %in% varlist) && !(colname %in% crossings)) next
     if (str_starts(colname, "_") || str_starts(colname, "dummy")) next
     
     if (is.null(val_labels(data[[c]]))) next
@@ -133,4 +176,197 @@ source("tbl_helpers.R")
     }
     data$superstrata[data$tbl_dataset == d] = d*1000 + data$superstrata[data$tbl_dataset == d]
   }
+  
+  data$superweegfactor = data$tbl_weegfactor
+  # missende weegfactoren mag niet, wat is het beleid?
+  # mogelijke configuraties:
+  # - verwijderen (rijen met missend gewicht eruit)
+  # - fout (foutmelding geven)
+  # - getal (vervangende waarde invoeren)
+  if (any(is.na(data$superweegfactor))) {
+    n = sum(is.na(data$superweegfactor))
+    if (algemeen$missing_weegfactoren == "fout") {
+      msg("Er zijn %d missende weegfactoren gevonden. Volgens de configuratie dient er dan te worden gestopt met uitvoering.\nPas dit aan in de data of de configuratie.",
+          n, level=ERR)
+    } else if (algemeen$missing_weegfactoren == "verwijderen") {
+      msg("Er zijn %d missende weegfactoren gevonden. Deze rijen zijn verwijderd uit de dataset, zoals aangegeven in de configuratie.",
+          n, level=MSG)
+      data = data[-which(is.na(data$superweegfactor)),]
+    } else if (str_detect(algemeen$missing_weegfactoren, "^\\d+")) {
+      msg("Er zijn %d missende weegfactoren gevonden. Deze waarden zijn vervangen door %s, zoals aangegeven in de configuratie.",
+          n, algemeen$missing_weegfactoren, level=MSG)
+      data$superweegfactor[is.na(data$superweegfactor)] = as.numeric(algemeen$missing_weegfactoren)
+    } else {
+      msg("Er zijn %d missende weegfactoren gevonden. Er is geen valide configuratie opgegeven om hiermee om te gaan. Zie de handleiding voor meer informatie.",
+          n, level=MSG)
+    }
+  }
+  
+  # survey design hoeft maar één keer gemaakt te worden;
+  # subsets kunnen daarna d.m.v. subset(design) uitgevoerd worden
+  design = svydesign(ids=~1, strata=data$superstrata, weights=data$superweegfactor, data=data)
+  
+  # door de onderdelen loopen en die verwerken
+  kolom_opbouw = data.frame()
+  test.col.cache = data.frame()
+  index = 1
+  for (i in 1:nrow(onderdelen)) {
+    if (!(onderdelen$dataset[i] %in% datasets$naam_dataset)) {
+      msg("Onderdeel %d (dataset %s, subset %s) bevat een ongeldige datasetnaam. Uitvoering gestopt.",
+          i, onderdelen$dataset[i], onderdelen$subset[i], level=ERR)
+    }
+    d = which(datasets$naam_dataset == onderdelen$dataset[i])
+    
+    # als met_crossing == WAAR, iedere crossing los toevoegen
+    # daarna altijd eentje met crossing = NA voor een totaalkolom
+    if (onderdelen$met_crossing[i]) {
+      if (algemeen$sign_toetsen && !is.na(onderdelen$sign_crossing[i])) {
+        # uitzoeken welke kolom tegenhanger moet zijn van de chi square
+        if (onderdelen$sign_crossing[i] == "intern") {
+          test.col = 0 # 0 betekent andere waarden van de crossing
+        } else if (str_detect(onderdelen$sign_crossing[i], "^\\d+$")) {
+          # nummer gegeven; dat moet een kolomindex zijn
+          test.col = as.numeric(onderdelen$sign_crossing[i])
+        } else {
+          # geen toets
+          test.col = NA
+        }
+      } else {
+        # geen toets
+        test.col = NA
+      }
+      for (crossing in crossings) {
+        crossing.labels = val_labels(data[[crossing]])
+        n = length(crossing.labels)
+        kolom_opbouw = bind_rows(kolom_opbouw, data.frame(col.index=index, dataset=d,
+                                                          subset=onderdelen$subset[i], year=onderdelen$jaar[i],
+                                                          crossing=crossing, n, crossing.val=str_c(unname(crossing.labels), collapse="|"),
+                                                          crossing.lab=str_c(names(crossing.labels), collapse="|"), test.col=test.col))
+        index = index + n
+      }
+    }
+    
+    # totalen toetsen?
+    if (algemeen$sign_toetsen && !is.na(onderdelen$sign_totaal[i])) {
+      if (str_detect(onderdelen$sign_totaal[i], "^\\d+$")) {
+        test.col = as.numeric(onderdelen$sign_totaal[i])
+      } else if (onderdelen$sign_totaal[i] %in% datasets$naam_dataset) {
+        # we weten nog niet in welke kolom een dataset eindigt
+        # daarom een aparte lijst met indexen die later gevuld moeten worden
+        test.col = NA
+        test.col.cache = bind_rows(test.col.cache, data.frame(col.index=nrow(kolom_opbouw)+1, test.col=onderdelen$sign_totaal[i]))
+      }
+    } else {
+      test.col = NA
+    }
+    
+    kolom_opbouw = bind_rows(kolom_opbouw, data.frame(col.index=index, dataset=d, subset=onderdelen$subset[i], year=onderdelen$jaar[i],
+                                                      crossing=NA, crossing.val=NA, crossing.lab=NA, test.col=test.col))
+    index = index + 1
+  }
+  
+  # moeten er nog testkolommen toegevoegd worden uit de cache?
+  if (nrow(test.col.cache) > 0) {
+    for (i in 1:nrow(test.col.cache)) {
+      # de laatste kolom uit de dataset is altijd totaal, dus hoogste waarde is direct de juiste kolom
+      kolom_opbouw$test.col[test.col.cache$col.index[i]] = max(which(kolom_opbouw$dataset == which(datasets$naam_dataset == test.col.cache$test.col[i])))
+    }
+  }
+  
+  ##### begin berekeningen
+  
+  # col.design = kolom_opbouw
+  GetTableRow = function (var, design, calculate.ci=T, col.design) {
+    msg("Variabele %s wordt uitgevoerd over %d kolommen.", var, nrow(col.design), level=DEBUG)
+    
+    # we hoeven alleen de afwijkende subsets te hebben, niet iedere crossing heeft een aparte subset nodig
+    # LET OP: daadwerkelijke subsetvariabelen komen pas later aan bod (ivm testen middels chi square)
+    col.design$global.subset = rep(NA, nrow(col.design))
+    col.design = col.design %>% group_by(dataset, subset, year)
+    subsets = group_keys(col.design)
+    for (i in 1:nrow(subsets)) {
+      subset = design$variables$tbl_dataset == subsets$dataset[i]
+      # scheiden per jaar?
+      if (!is.na(subsets$year[i])) {
+        subset = subset & design$variables$tbl_jaar == subsets$year[i]
+      }
+      
+      col.design$global.subset[group_rows(col.design)[[i]]] = list(subset)
+    }
+    
+    results = data.frame()
+    for (i in 1:nrow(col.design)) {
+      if (!is.na(col.design$subset[i])) {
+        # splitsen op variabele
+        
+        # TODO: dit schrijven
+      } else {
+        # niet splitsen op variabele
+        
+        # crossings
+        if (!is.na(col.design$crossing[i])) {
+          weighted = svytable(formula=as.formula(paste0("~", var, "+", col.design$crossing[i])),
+                              design=subset(design, col.design$global.subset[[i]]))
+          unweighted = table(design$variables[[var]][col.design$global.subset[[i]]], design$variables[[col.design$crossing[i]]][col.design$global.subset[[i]]])
+          n = length(weighted)
+          
+          # significantie testen?
+          pvals = matrix(NA, nrow=nrow(weighted), ncol=ncol(weighted))
+          rownames(pvals) = rownames(weighted)
+          if (!is.na(col.design$test.col[i])) {
+            answers = rownames(weighted)
+            for (answer in answers) {
+              if (col.design$test.col[i] == 0) {
+                # binnen de crossing testen
+                test = svychisq(formula=as.formula(paste0("~dummy.", var, ".", answer, "+", col.design$crossing[i])), design=subset(design, col.design$global.subset[[i]]))
+                pvals[answer,] = rep(test$p.value, ncol(pvals))
+              } else {
+                # vergelijken met andere kolom
+                test = svychisq(formula=as.formula(paste0()), design=subset(design, col.design$global.subset[[i]] | col.design$global.subset[[col.design$test.col[i]]]))
+              }
+            }
+          }
+          
+          # om de resultaten in een dataframe te krijgen moeten ze door as.numeric() en unname()
+          # dit zorgt ervoor dat de structuur verloren gaat; de kolommen worden onder elkaar geplaatst
+          # we moeten dus de waardes indelen als colnames[1] * nrow, colnames[2] * nrow, etc.
+          vals = as.vector(sapply(colnames(weighted), function (x, nrows) return(rep(x, nrows)), nrows=nrow(weighted)))
+          
+          results = bind_rows(results, data.frame(dataset=rep(col.design$dataset[i], n), subset=rep(col.design$subset[i], n), subset.val=rep(NA, n),
+                                                  year=rep(col.design$year[i], n),
+                                                  crossing=rep(col.design$crossing[i], n), crossing.val=vals,
+                                                  sign.vs=rep(col.design$test.col[i], n), sign=as.numeric(unname(pvals)),
+                                                  var=rep(var, n), val=rownames(weighted),
+                                                  n.weighted=as.numeric(unname(weighted)), perc.weighted=as.numeric(unname(proportions(weighted, margin=2)))*100,
+                                                  n.unweighted=as.numeric(unname(unweighted)), perc.unweighted=as.numeric(unname(proportions(unweighted, margin=2)))*100))
+        } else {
+          # totaal
+          weighted = svytable(formula=as.formula(paste("~", var)) , design=subset(design, col.design$global.subset[[i]]))
+          unweighted = as.numeric(unname(table(design$variables[[var]][col.design$global.subset[[i]]])))
+          n = length(weighted)
+          
+          # TODO: chi square invoegen
+          
+          results = bind_rows(results, data.frame(dataset=rep(col.design$dataset[i], n), subset=rep(col.design$subset[i], n), subset.val=rep(NA, n),
+                                                  year=rep(col.design$year[i], n),
+                                                  crossing=rep(NA, n), crossing.val=rep(NA, n),
+                                                  sign.vs=rep(col.design$test.col[i], n), sign=rep(T, n),
+                                                  var=rep(var, n), val=names(weighted),
+                                                  n.weighted=as.numeric(unname(weighted)), perc.weighted=proportions(as.numeric(unname(weighted)))*100,
+                                                  n.unweighted=unweighted, perc.unweighted=proportions(unweighted)*100))
+        }
+      }
+    }
+    
+    return(results)
+  }
+  
+  results = data.frame()
+  for (var in varlist) {
+    results = bind_rows(results, GetTableRow(var, design, F, kolom_opbouw))
+  }
+  
+  # berekeningen kunnen parallel worden uitgevoerd met multithreading
+  # hierdoor worden meerdere processorkernen ingezet om de berekeningen uit te voeren
+  # (dit kan handig zijn, omdat survey een bijzonder traag pakket is)
 }
