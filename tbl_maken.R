@@ -268,137 +268,44 @@ source("tbl_helpers.R")
   
   # dummyvariabelen maken voor iedere kolom
   # dit is nodig om later een chi square uit te kunnen voeren over een vergelijkingsset, omdat survey pure pijn is
-  # LET OP: daadwerkelijke subsetvariabelen komen pas later aan bod (ivm testen middels chi square)
-  kolom_opbouw$global.subset = rep(NA, nrow(kolom_opbouw))
   #kolom_opbouw = kolom_opbouw %>% group_by(dataset, subset, year)
   #subsets = group_keys(kolom_opbouw)
   for (i in 1:nrow(kolom_opbouw)) {
-    subset = data$tbl_dataset == kolom_opbouw$dataset[i]
+    kolom = data$tbl_dataset == kolom_opbouw$dataset[i]
     # scheiden per jaar?
     if (!is.na(kolom_opbouw$year[i])) {
-      subset = subset & data$tbl_jaar == kolom_opbouw$year[i]
+      kolom = kolom & data$tbl_jaar == kolom_opbouw$year[i]
     }
     # crossing?
     if (!is.na(kolom_opbouw$crossing[i])) {
-      subset = subset & data[[kolom_opbouw$crossing[i]]] == kolom_opbouw$crossing.val[i]
+      kolom = kolom & data[[kolom_opbouw$crossing[i]]] == kolom_opbouw$crossing.val[i]
     }
     
-    data[,paste0("dummy._col", i)] = subset
+    data[,paste0("dummy._col", i)] = kolom
+    
+    # ook splitsen per subset?
+    if (!is.na(kolom_opbouw$subset[i])) {
+      subsetvals = val_labels(data[[kolom_opbouw$subset[i]]])
+      
+      for (val in subsetvals) {
+        subset = kolom & data[[kolom_opbouw$subset[i]]] == val
+        if (sum(subset, na.rm=T) <= 0) next # als er geen data bestaat voor die subset is het een beetje nutteloos
+        data[,paste0("dummy._col", i, ".s.", unname(val))] = subset
+      }
+    }
   }
   
   ##### begin berekeningen
   
-  # col.design = kolom_opbouw
-  GetTableRow = function (var, design, calculate.ci=T, col.design) {
-    msg("Variabele %s wordt uitgevoerd over %d kolommen.", var, nrow(col.design), level=MSG)
-    
-    results = data.frame()
-    
-    col.design = col.design %>% group_by(dataset, subset, year, crossing, test.col)
-    subsets = group_keys(col.design)
-    
-    for (i in 1:nrow(subsets)) {
-      msg("Subset %d: dataset %d, subset %s, jaar %s, crossing %s", level=DEBUG,
-          i, subsets$dataset[i], subsets$subset[i], subsets$year[i], subsets$crossing[i])
-      # we loopen op basis van selectiecriteria ipv kolomnummer, omdat er anders meerdere svychisq calls nodig zouden zijn voor crossings
-      if (!is.na(subsets$subset[i])) {
-        # splitsen op variabele
-        
-        # TODO: schrijven
-      } else {
-        # niet splitsen op variabele
-        
-        # crossing? zo ja, dan kunnen we dit behandelen als totaal indien er NIET intern vergeleken wordt (binnen de else)
-        # anders wel behandelen als crossing (dus binnen de if)
-        if (!is.na(subsets$crossing[i]) && !is.na(subsets$test.col[i]) && subsets$test.col[i] == 0) {
-          # dit betekent meerdere kolommen vullen
-          cols = col.design$col.index[group_rows(col.design)[[i]]]
-          selection = str_c(paste0("dummy._col", cols), collapse=" | ")
-          design.subset = subset(design, eval(parse(text=selection)))
-
-          weighted = svytable(formula=as.formula(paste0("~", var, "+", subsets$crossing[i])),
-                              design=design.subset)
-          unweighted = table(design.subset$variables[[var]], design.subset$variables[[subsets$crossing[i]]])
-          n = length(weighted)
-          
-          pvals = matrix(NA, nrow=nrow(weighted), ncol=ncol(weighted))
-          rownames(pvals) = rownames(weighted)
-          
-          answers = rownames(weighted)
-          for (answer in answers) {
-            test = svychisq(formula=as.formula(paste0("~dummy.", var, ".", answer, "+", col.design$crossing[i])), design=design.subset)
-            pvals[answer,] = rep(test$p.value, ncol(pvals))
-          }
-          
-          # om de resultaten in een dataframe te krijgen moeten ze door as.numeric() en unname()
-          # dit zorgt ervoor dat de structuur verloren gaat; de kolommen worden onder elkaar geplaatst
-          # we moeten dus de waardes indelen als colnames[1] * nrow, colnames[2] * nrow, etc.
-          vals = as.vector(sapply(colnames(weighted), function (x, nrows) return(rep(x, nrows)), nrows=nrow(weighted)))
-          
-          results = bind_rows(results, data.frame(dataset=rep(subsets$dataset[i], n), subset=rep(subsets$subset[i], n), subset.val=rep(NA, n),
-                                                  year=rep(subsets$year[i], n),
-                                                  crossing=rep(subsets$crossing[i], n), crossing.val=vals,
-                                                  sign.vs=rep(subsets$test.col[i], n), sign=as.numeric(unname(pvals)),
-                                                  var=rep(var, n), val=rownames(weighted),
-                                                  n.weighted=as.numeric(unname(weighted)), perc.weighted=as.numeric(unname(proportions(weighted, margin=2)))*100,
-                                                  n.unweighted=as.numeric(unname(unweighted)), perc.unweighted=as.numeric(unname(proportions(unweighted, margin=2)))*100))
-        } else {
-          # geen crossing; totaal
-          
-          col = col.design$col.index[group_rows(col.design)[[i]]]
-          
-          weighted = svytable(formula=as.formula(paste0("~", var, "+dummy._col", col)), design=design)
-          if (ncol(weighted) == 2 && colnames(weighted)[2] == "TRUE") {
-            weighted = weighted[,2]
-          } else {
-            names = rownames(weighted)
-            weighted = rep(NA, nrow(weighted))
-            names(weighted) = names
-          }
-          unweighted = as.numeric(unname(table(design$variables[[var]][design$variables[,paste0("dummy._col", col)]])))
-          if (sum(unweighted, na.rm=T) <= 0) unweighted = rep(NA, length(weighted))
-          n = length(weighted)
-          
-          pvals = rep(NA, n)
-          names(pvals) = names(weighted)
-          
-          # significantie berekenen?
-          if (!is.na(subsets$test.col[i]) && sum(unweighted, na.rm=T) > 0) {
-            # tweede kolom includeren
-            selection = str_c(paste0("dummy._col", c(col, subsets$test.col[i])), collapse=" | ")
-            design.subset = subset(design, eval(parse(text=selection)))
-            
-            answers = names(weighted)
-            for (answer in answers) {
-              test = svychisq(formula=as.formula(paste0("~dummy.", var, ".", answer, "+dummy._col", col)),
-                              design=design.subset)
-              pvals[answer] = test$p.value
-            }
-          }
-          
-          results = bind_rows(results, data.frame(dataset=rep(col.design$dataset[col], n), subset=rep(col.design$subset[col], n), subset.val=rep(NA, n),
-                                                  year=rep(col.design$year[col], n),
-                                                  crossing=rep(col.design$crossing[col], n), crossing.val=as.character(rep(col.design$crossing.val[col], n)),
-                                                  sign.vs=rep(col.design$test.col[col], n), sign=pvals,
-                                                  var=rep(var, n), val=names(weighted),
-                                                  n.weighted=as.numeric(unname(weighted)), perc.weighted=proportions(as.numeric(unname(weighted)))*100,
-                                                  n.unweighted=unweighted, perc.unweighted=proportions(unweighted)*100))
-        }
-      }
-    }
-    
-    
-    return(results)
-  }
-  
+  source("tbl_GetTableRow.R")
   results = data.frame()
   for (var in varlist) {
     # we kunnen de dataset die de functie in moet flink verkleinen; alle variabelen
-    # behalve [var], dummy._col[1:n], dummy.[var] en de crossings kunnen eruit
-    vars = c(var, unique(kolom_opbouw$crossing), unique(kolom_opbouw$subset))
-    vars = vars[!is.na(vars)]
-    data.tmp = data %>% select(all_of(vars), starts_with("dummy._col"), starts_with(paste0("dummy.", var)),
-                               superstrata, superweegfactor)
+    # behalve [var], dummy._col[1:n], dummy.[var], de subsets en de crossings kunnen eruit
+    vars = c(var, kolom_opbouw$crossing, kolom_opbouw$subset, colnames(data)[str_starts(colnames(data), "dummy._col")],
+             colnames(data)[str_starts(colnames(data), paste0("dummy.", var))], "superstrata", "superweegfactor")
+    vars = unique(vars[!is.na(vars)])
+    data.tmp = data[,vars]
     design = svydesign(ids=~1, strata=data.tmp$superstrata, weights=data.tmp$superweegfactor, data=data.tmp)
     
     results = bind_rows(results, GetTableRow(var, design, F, kolom_opbouw))
