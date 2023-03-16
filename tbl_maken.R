@@ -297,21 +297,118 @@ source("tbl_helpers.R")
   
   ##### begin berekeningen
   
-  source("tbl_GetTableRow.R")
-  results = data.frame()
-  for (var in varlist) {
-    # we kunnen de dataset die de functie in moet flink verkleinen; alle variabelen
-    # behalve [var], dummy._col[1:n], dummy.[var], de subsets en de crossings kunnen eruit
-    vars = c(var, kolom_opbouw$crossing, kolom_opbouw$subset, colnames(data)[str_starts(colnames(data), "dummy._col")],
-             colnames(data)[str_starts(colnames(data), paste0("dummy.", var))], "superstrata", "superweegfactor")
-    vars = unique(vars[!is.na(vars)])
-    data.tmp = data[,vars]
-    design = svydesign(ids=~1, strata=data.tmp$superstrata, weights=data.tmp$superweegfactor, data=data.tmp)
+  # mochten er subsets zijn, dan is het efficiënter om 1x te berekenen welke matches hierin bestaan
+  # een tabellenboek wordt meestal gemaakt voor een geografische eenheid (gemeente/regio/GGD-gebied)
+  # daarbij kan het zijn dat een vergelijkingskolom wordt toegevoegd van een groter gebied (bijv. gemeente Apeldoorn vs. subregio Midden-IJssel)
+  # of er kan een vergelijkingskolom zijn van dezelfde eenheid uit een ander jaar (bijv. Apeldoorn 2022 vs. Apeldoorn 2019)
+  # we gaan er daarom vanuit dat de eerste subset (in Excel de bovenste rij) de leidende is, en dat de rest gebaseerd is op die subset
+  if (any(!is.na(kolom_opbouw$subset))) {
+    leadingsubset = kolom_opbouw$subset[which(!is.na(kolom_opbouw$subset))[1]]
+    leadingcol = min(kolom_opbouw$col.index[which(!is.na(kolom_opbouw$subset))[1]])
     
-    results = bind_rows(results, GetTableRow(var, design, F, kolom_opbouw))
+    subsetvals = val_labels(data[[leadingsubset]])
+    
+    if (sum(!is.na(unique(kolom_opbouw$subset))) > 1) {
+      # bij meer dan één subset de tweede af laten hangen van de eerste
+      possiblesubsets = unique(kolom_opbouw$subset[which(!is.na(kolom_opbouw$subset) & kolom_opbouw$subset != leadingsubset)])
+      
+      subsetmatches = matrix(nrow=length(subsetvals), ncol=length(possiblesubsets)+1)
+      colnames(subsetmatches) = c(leadingsubset, possiblesubsets)
+      subsetmatches[,1] = subsetvals
+      rownames(subsetmatches) = names(subsetvals)
+      
+      # mogelijke matches doorlopen
+      for (s in 1:length(subsetvals)) {
+        for (p in 1:length(possiblesubsets)) {
+          matches = as.numeric(unique(data[[possiblesubsets[p]]][data[[leadingsubset]] == subsetvals[s]]))
+          matches = matches[!is.na(matches)]
+          
+          if (length(matches) > 1) {
+            msg("Let op: aanvullende subset %s heeft %d mogelijkheden in de dataset: %s. Dit is niet mogelijk voor berekening; enkel eerste optie gebruikt.",
+                possiblesubsets[p], length(matches), str_c(matches, collapse=", "), level=WARN)
+            matches = matches[1]
+          } else if (length(matches) == 0) {
+            matches = NA
+          }
+          
+          subsetmatches[s,p+1] = matches
+        }
+      }
+    } else {
+      subsetmatches = matrix(subsetvals, ncol=1)
+      colnames(subsetmatches) = leadingsubset
+      rownames(subsetmatches) = names(subsetvals)
+    }
+  } else {
+    subsetmatches = NULL
   }
   
-  # berekeningen kunnen parallel worden uitgevoerd met multithreading
-  # hierdoor worden meerdere processorkernen ingezet om de berekeningen uit te voeren
-  # (dit kan handig zijn, omdat survey een bijzonder traag pakket is)
+  # zijn er eerder resultaten gemaakt uit dit configuratiebestand met een gelijke indeling?
+  calc.results = T
+  if (file.exists(sprintf("resultaten_csv/results_%s.csv", basename(config.file))) &&
+      file.exists(sprintf("resultaten_csv/settings_%s.csv", basename(config.file))) &&
+      file.exists(sprintf("resultaten_csv/vars_%s.csv", basename(config.file)))) {
+    results = read.csv(sprintf("resultaten_csv/results_%s.csv", basename(config.file)), fileEncoding="UTF-8")
+    kolom_opbouw.prev = read.csv(sprintf("resultaten_csv/settings_%s.csv", basename(config.file)), fileEncoding="UTF-8")
+    varlist.prev = read.csv(sprintf("resultaten_csv/vars_%s.csv", basename(config.file)), fileEncoding="UTF-8")[,1]
+    
+    kolom_opbouw.identical = T
+    for (i in 1:ncol(kolom_opbouw)) {
+      # N.B.: je zou verwachten dat identical(x, y) hier zou werken, maar dat blijkt niet zo te zijn
+      # ik ben er niet achter gekomen waarom niet... deze functie werkt in elk geval naar behoren
+      if (!isTRUE(all.equal(unname(kolom_opbouw[,i]), unname(kolom_opbouw.prev[,i]))))
+        kolom_opbouw.identical = F
+    }
+    
+    if (kolom_opbouw.identical && identical(varlist, varlist.prev)) {
+      msg("Eerdere resultaten aangetroffen vanuit deze configuratie (%s). Berekening wordt overgeslagen. Indien er nieuwe data is toegevoegd, verwijder dan de bestanden uit de map resultaten_csv.",
+          basename(config.file), level=MSG)
+      
+      calc.results = F
+    } else {
+      msg("Er zijn eerdere resultaten aangetroffen vanuit deze configuratie (%s), maar de instellingen waren niet identiek. Berekening wordt opnieuw uitgevoerd.", level=MSG)
+    }
+  }
+  
+  if (calc.results) {
+    source("tbl_GetTableRow.R")
+    results = data.frame()
+    # berekeningen kunnen parallel worden uitgevoerd met multithreading
+    # hierdoor worden meerdere processorkernen ingezet om de berekeningen uit te voeren
+    # (dit kan handig zijn, omdat survey een bijzonder traag pakket is)
+    # TODO: parallel maken
+    for (var in varlist) {
+      # we kunnen de dataset die de functie in moet flink verkleinen; alle variabelen
+      # behalve [var], dummy._col[1:n], dummy.[var], de subsets en de crossings kunnen eruit
+      vars = c(var, kolom_opbouw$crossing, kolom_opbouw$subset, colnames(data)[str_starts(colnames(data), "dummy._col")],
+               colnames(data)[str_starts(colnames(data), paste0("dummy.", var))], "superstrata", "superweegfactor")
+      vars = unique(vars[!is.na(vars)])
+      data.tmp = data[,vars]
+      design = svydesign(ids=~1, strata=data.tmp$superstrata, weights=data.tmp$superweegfactor, data=data.tmp)
+      
+      results = bind_rows(results, GetTableRow(var, design, F, kolom_opbouw, subsetmatches))
+    }
+    
+    # resultaten opslaan voor hergebruik
+    # N.B.: alles in UTF-8 om problemen met een trema o.i.d. te voorkomen
+    write.csv(varlist, sprintf("resultaten_csv/vars_%s.csv", basename(config.file)), fileEncoding="UTF-8", row.names=F)
+    write.csv(kolom_opbouw, sprintf("resultaten_csv/settings_%s.csv", basename(config.file)), fileEncoding="UTF-8", row.names=F)
+    write.csv(results, sprintf("resultaten_csv/results_%s.csv", basename(config.file)), fileEncoding="UTF-8", row.names=F)
+  }
+  
+  ##### begin wegschrijven tabellenboeken in Excel
+  source("tbl_MakeExcel.R")
+  if (is.null(subsetmatches)) {
+    # geen subsets, 1 tabellenboek
+  } else {
+    # wel subsets, meerdere tabellenboeken
+    subsetvals = subsetmatches[,1]
+    for (s in 1:length(subsetvals)) {
+      if (sum(results$subset == colnames(subsetmatches)[1] & results$subset.val == subsetvals[s], na.rm=T) < 1)
+        next # geen data gevonden voor deze subset, overslaan
+      
+      msg("Tabellenboek voor %s wordt gemaakt.", names(subsetvals[s]), level=MSG)
+      #MakeExcel(results, kolom_opbouw, colnames(subsetmatches)[1], subsetvals[s], subsetmatches)
+    }
+  }
 }
