@@ -158,7 +158,7 @@ GetTableRow = function (var, design, calculate.ci=T, col.design, subsetmatches) 
             }
           }
           
-          results = bind_rows(results, data.frame(dataset=rep(col.design$dataset[col], n), subset=rep(col.design$subset[col], n), subset.val=rep(subsetvals[s], n),
+          results = bind_rows(results, data.frame(dataset=rep(col.design$dataset[col], n), subset=rep(col.design$subset[col], n), subset.val=rep(subsetval, n),
                                                   year=rep(col.design$year[col], n),
                                                   crossing=rep(col.design$crossing[col], n), crossing.val=as.character(rep(col.design$crossing.val[col], n)),
                                                   var=rep(var, n), val=names(weighted),

@@ -61,7 +61,7 @@ source("tbl_helpers.R")
   
   # daadwerkelijk inlezen configuratie
   # TODO: onmogelijke waardes checken
-  sheets = c("algemeen", "crossings", "datasets", "indeling_rijen", "onderdelen")
+  sheets = c("algemeen", "crossings", "datasets", "indeling_rijen", "onderdelen", "opmaak")
   for (sheet in sheets) {
     tmp = read.xlsx(config.file, sheet=sheet)
     if (ncol(tmp) == 1) tmp = tmp[[1]]
