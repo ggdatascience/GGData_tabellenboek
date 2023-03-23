@@ -366,7 +366,7 @@ source("tbl_helpers.R")
       
       calc.results = F
     } else {
-      msg("Er zijn eerdere resultaten aangetroffen vanuit deze configuratie (%s), maar de instellingen waren niet identiek. Berekening wordt opnieuw uitgevoerd.", level=MSG)
+      msg("Er zijn eerdere resultaten aangetroffen vanuit deze configuratie (%s), maar de instellingen waren niet identiek. Berekening wordt opnieuw uitgevoerd.", basename(config.file), level=MSG)
     }
   }
   
@@ -400,6 +400,7 @@ source("tbl_helpers.R")
   source("tbl_MakeExcel.R")
   if (is.null(subsetmatches)) {
     # geen subsets, 1 tabellenboek
+    # TODO: maken
   } else {
     # wel subsets, meerdere tabellenboeken
     subsetvals = subsetmatches[,1]
@@ -408,7 +409,7 @@ source("tbl_helpers.R")
         next # geen data gevonden voor deze subset, overslaan
       
       msg("Tabellenboek voor %s wordt gemaakt.", names(subsetvals[s]), level=MSG)
-      #MakeExcel(results, kolom_opbouw, colnames(subsetmatches)[1], subsetvals[s], subsetmatches)
+      MakeExcel(results, kolom_opbouw, colnames(subsetmatches)[1], subsetvals[s], subsetmatches)
     }
   }
 }

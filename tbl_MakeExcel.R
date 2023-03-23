@@ -63,13 +63,15 @@ MakeExcel = function (results, col.design, subset, subset.val, subsetmatches) {
   
   style.sign = createStyle(textDecoration="bold") # significante resultaten
   style.title = createStyle(fontSize=design("titel_size"), fontColour=design("titel_color"),
-                            textDecoration=design("titel_decoration"), bgFill=design("titel_fill")) # titels
+                            textDecoration=design("titel_decoration"), fgFill=design("titel_fill")) # titels
   style.subtitle = createStyle(fontSize=design("kop_size"), fontColour=design("kop_color"),
-                               textDecoration=design("kop_decoration"), bgFill=design("kop_fill")) # koppen
+                               textDecoration=design("kop_decoration"), fgFill=design("kop_fill")) # koppen
   style.text = createStyle(wrapText=T)
   style.header.col = createStyle(halign="center", valign="center", textDecoration="bold") # kolomkoppen
+  style.header.col.crossing = createStyle(halign="center", valign="center") # kolomkoppen crossings
   style.perc = createStyle(halign="center", valign="center") # percentagetekens
   style.num = createStyle(numFmt="0", halign="center", valign="center") # cijfers -> 0 betekent hele getallen zonder decimalen, 0.0 -> 1 decimaal, etc.
+  style.gray.bg = createStyle(fgFill = "#F2F2F2") # voor afwisselende kolommen/rijen
   
   # instellingen
   header.col.nrows = 1 # ifelse(opmaak("dubbel"), 2, 1) # aantal rijen per kolomheader
@@ -77,6 +79,10 @@ MakeExcel = function (results, col.design, subset, subset.val, subsetmatches) {
   
   # opslag voor rijen die later aangemaakt of opgemaakt moeten worden
   header.col.rows = numeric(0)
+  data.rows = numeric(0)
+  title.rows = numeric(0)
+  perc.rows = numeric(0)
+  label.oversized.rows = numeric(0)
   
   c = 1 # teller voor rijen in Excel
   indeling_rijen$type = str_to_lower(str_trim(indeling_rijen$type))
@@ -96,15 +102,17 @@ MakeExcel = function (results, col.design, subset, subset.val, subsetmatches) {
       # TODO: meer opmaak?
       if (indeling_rijen$type[i] == "titel") {
         addStyle(wb, subset.name, style.title, rows=c, cols=1:n.col.total, stack=T)
+        title.rows = c(title.rows, c)
       } else if (indeling_rijen$type[i] == "kop") {
         # TODO: willen we hier weer headers toevoegen als de volgende regel een var is?
         addStyle(wb, subset.name, style.subtitle, rows=c, cols=1:n.col.total, stack=T)
+        title.rows = c(title.rows, c)
       } else { # tekst
         addStyle(wb, subset.name, style.text, rows=c, cols=1:n.col.total, stack=T)
         mergeCells(wb, subset.name, cols=2:n.col.total, rows=c)  
       }
       
-      c = c + ifelse(indeling_rijen$type[i] == "tekst", 1, 2) # een extra witregel na een kop of titel
+      c = c + 1 #ifelse(indeling_rijen$type[i] == "tekst", 1, 2) # een extra witregel na een kop of titel
     } else if (indeling_rijen$type[i] == "aantallen") { # regel met aantal deelnemers toevoegen
       output = matrix(nrow=1, ncol=nrow(col.design))
       for (j in 1:nrow(col.design)) {
@@ -137,6 +145,9 @@ MakeExcel = function (results, col.design, subset, subset.val, subsetmatches) {
       
       writeData(wb, subset.name, "aantallen", startCol=1, startRow=c, colNames=F)
       writeData(wb, subset.name, output, startCol=3, startRow=c, colNames=F)
+      addStyle(wb, subset.name, style.num, rows=c, cols=3:n.col.total, stack=T)
+      data.rows = c(data.rows, c)
+      
       c = c + 2
     } else if (indeling_rijen$type[i] == "var") { # variabele toevoegen
       # benodigde resultaten ophalen, zodat we niet steeds belachelijke selectors nodig hebben
@@ -180,30 +191,99 @@ MakeExcel = function (results, col.design, subset, subset.val, subsetmatches) {
       sign = data.var[which(data.var$sign < algemeen$confidence_level), c("val", "col.index")]
       sign$rij = sapply(sign$val, function (v) which(rownames(output) == v))
       
-      # labels toevoegen
-      output = output %>% as.data.frame() %>% rownames_to_column("val") %>%
-        mutate(label=sapply(val, function(v) val_label(data[[indeling_rijen$inhoud[i]]], v)),
-               matchcode=paste0(indeling_rijen$inhoud[i], val)) %>%
-        relocate(matchcode, label) %>%
-        select(-val)
+      # dichotoom? zo ja, alleen 1 (= ja) laten zien en geen kop met de vraag
+      # zo nee, kop met de vraag en alle waardes laten zien
+      levels.var = sort(as.numeric(unique(data.var$val)))
+      dichotoom.vals = algemeen$waarden_dichotoom %>% 
+        str_split("\\|") %>%
+        unlist() %>%
+        str_split(",") %>%
+        lapply(as.numeric)
+      # TODO: tabbladen met dichotoom/niet_dichotoom?
+      if (isTRUE(all.equal(levels.var, c(0, 1))) || any(unlist(lapply(dichotoom.vals, function (x) { return(identical(x, levels.var)) })))) {
+        output = output %>% as.data.frame() %>% rownames_to_column("val") %>% filter(val == 1) %>%
+          mutate(label=var_label(data[[indeling_rijen$inhoud[[i]]]]),
+                 matchcode=paste0(indeling_rijen$inhoud[i], val)) %>%
+          relocate(matchcode, label) %>%
+          select(-val)
+        
+        # significantie ook aanpassen naar 1 regel
+        sign = sign %>% filter(val == 1)
+        
+        # is de vorige regel een kop? dan headers en percentages toevoegen
+        if (i > 1 && indeling_rijen$type[i-1] == "kop") {
+          # ruimte vrijhouden voor het later invoegen van headers
+          header.col.rows = c(header.col.rows, c)
+          c = c + header.col.nrows
+          
+          # TODO: nvar toevoegen?
+          # regel met procenttekens
+          writeData(wb, subset.name, t(rep("%", n.col)), startCol=3, startRow=c, colNames=F)
+          addStyle(wb, subset.name, style.perc, cols=3:n.col.total, rows=c, gridExpand=T, stack=T)
+          perc.rows = c(perc.rows, c)
+          c = c + 1
+        }
+      } else { # niet dichotoom
+        # labels toevoegen
+        output = output %>% as.data.frame() %>% rownames_to_column("val") %>%
+          mutate(label=sapply(val, function(v) val_label(data[[indeling_rijen$inhoud[i]]], v)),
+                 matchcode=paste0(indeling_rijen$inhoud[i], val)) %>%
+          relocate(matchcode, label) %>%
+          select(-val)
+        
+        c = c + 1 # witregel na vorige blok
+        
+        # kop met de vraag toevoegen
+        writeData(wb, subset.name, data.frame(col1=indeling_rijen$inhoud[i], col2=var_label(data[[indeling_rijen$inhoud[i]]])), startCol=1, startRow=c, colNames=F)
+        addStyle(wb, subset.name, style.subtitle, cols=2:n.col.total, rows=c, stack=T)
+        title.rows = c(title.rows, c)
+        c = c + 1
+        
+        # ruimte vrijhouden voor het later invoegen van headers
+        header.col.rows = c(header.col.rows, c)
+        c = c + header.col.nrows
+        
+        # TODO: nvar toevoegen?
+        # regel met procenttekens
+        writeData(wb, subset.name, t(rep("%", n.col)), startCol=3, startRow=c, colNames=F)
+        addStyle(wb, subset.name, style.perc, cols=3:n.col.total, rows=c, gridExpand=T, stack=T)
+        perc.rows = c(perc.rows, c)
+        
+        c = c + 1
+      }
       
-      # ruimte vrijhouden voor het later invoegen van headers
-      header.col.rows = c(header.col.rows, c)
-      c = c + header.col.nrows
+      labels.oversized = which(str_length(output[,2]) > design("label_max_lengte"))
+      if (length(labels.oversized) > 0) {
+        label.oversized.rows = c(label.oversized.rows, c + labels.oversized - 1)
+      }
       
-      # TODO: nvar toevoegen?
-      writeData(wb, subset.name, t(rep("%", n.col)), startCol=3, startRow=c, colNames=F)
-      addStyle(wb, subset.name, style.perc, cols=3:n.col.total, rows=c, gridExpand=T, stack=T)
-      c = c + 1
-      
+      # daadwerkelijke data wegschrijven
       writeData(wb, subset.name, output, startCol=1, startRow=c, colNames=F)
+      addStyle(wb, subset.name, style.text, cols=2, rows=c:(c+nrow(output)), stack=T)
       addStyle(wb, subset.name, style.num, cols=3:n.col.total, rows=c:(c+nrow(output)), gridExpand=T, stack=T)
       if (nrow(sign) > 0) {
         addStyle(wb, subset.name, style.sign, rows=c-1+sign$rij, cols=2+sign$col.index, stack=T)
       }
+      data.rows = c(data.rows, c:(c+nrow(output)-1))
       c = c + nrow(output)
     }
   }
+  
+  # laatste regel aanhouden als einde, zodat de kleuren niet doorlopen
+  c = c - 1
+  
+  # algemene opmaak
+  setColWidths(wb, subset.name, cols=1, hidden=T) # 1e kolom verbergen, die is alleen voor eigen naslag
+  setColWidths(wb, subset.name, cols=2, width=design("kolombreedte_antwoorden")) # 2de kolom breder voor de tekstlabels
+  setColWidths(wb, subset.name, cols=3:n.col.total, width=design("kolombreedte")) # 3 tot nde kolom vaste breedte
+  setRowHeights(wb, subset.name, rows=1:c, heights=design("rij_hoogte"))
+  
+  if (length(label.oversized.rows) > 0) {
+    setRowHeights(wb, subset.name, rows=label.oversized.rows, heights=design("rij_hoogte")*2)
+  }
+  
+  addStyle(wb, subset.name, createStyle(wrapText=T), rows=1:c, cols=1:n.col.total, gridExpand=T, stack=T)
+  addStyle(wb, subset.name, createStyle(fgFill="#ffffff"), rows=which(!1:c %in% title.rows), cols=1:n.col.total, gridExpand=T, stack=T)
   
   # headers toevoegen
   # deze kunnen 1 of 2 regels beslaan:
@@ -238,11 +318,48 @@ MakeExcel = function (results, col.design, subset, subset.val, subsetmatches) {
   
   for (i in header.col.rows) {
     writeData(wb, subset.name, output, startCol=3, startRow=i, colNames=F)
-    # TODO: opmaak
+    setRowHeights(wb, subset.name, rows=i:(i+header.col.nrows-1), heights=design("rij_hoogte_kop"))
+    addStyle(wb, subset.name, style.header.col, rows=i:(i+header.col.nrows-1), cols=2 + which(is.na(col.design$crossing)), gridExpand=T, stack=T)
+    if (design("crossing_headers_kleiner") && sum(!is.na(col.design$crossing)) > 0) {
+      addStyle(wb, subset.name, style.header.col.crossing, rows=i:(i+header.col.nrows-1), cols=2 + which(!is.na(col.design$crossing)), gridExpand=T, stack=T)
+    } else {
+      addStyle(wb, subset.name, style.header.col, rows=i:(i+header.col.nrows-1), cols=2 + which(!is.na(col.design$crossing)), gridExpand=T, stack=T)
+    }
   }
   
-  # algemene opmaak
-  setColWidths(wb, subset.name, cols=1, hidden=T) # 1e kolom verbergen, die is alleen voor eigen naslag
+  # afwisselende kleuren?
+  if (design("rijen_afwisselend_kleuren")) {
+    # data.rows bevat de rijen met data
+    # als het verschil tussen twee waardes meer dan 1 is gaat het om een nieuwe categorie, dus daar steeds opnieuw beginnen met tellen
+    data.rows.diff = data.rows - lag(data.rows)
+    data.rows.blocks = which(data.rows.diff > 1)
+    
+    data.rows.interval = c()
+    for (i in 1:length(data.rows.blocks)) {
+      end = ifelse(i < length(data.rows.blocks), data.rows[data.rows.blocks[i + 1]-1], data.rows[length(data.rows)])
+      
+      data.rows.interval = c(data.rows.interval, seq(from=data.rows[data.rows.blocks[i]]+1, to=end, by=2))
+    }
+    
+    addStyle(wb, subset.name, style.gray.bg, rows=data.rows.interval, cols=1:n.col.total, gridExpand=T, stack=T)
+  }
+  if (design("kolommen_afwisselend_kleuren")) {
+    addStyle(wb, subset.name, style.gray.bg, rows=1:c, cols=seq(from=3, to=n.col.total, by=2), gridExpand=T, stack=T)
+  }
+  if (design("kolommen_crossings_kleuren")) {
+    col.design = col.design %>% group_by(dataset, subset, year, crossing)
+    gray = T
+    for (i in group_rows(col.design)) {
+      if (gray) {
+        addStyle(wb, subset.name, style.gray.bg, rows=c(data.rows, perc.rows, header.col.rows + ifelse(design("header_stijl") == "enkel", 0, 1)),
+                 cols=2+i, gridExpand=T, stack=T)
+      }
+      gray = !gray
+    }
+  }
+  
+  # TODO: borders om de tabellen?
+
   
   # en als laatste... opslaan!
   saveWorkbook(wb, sprintf("output/%s.xlsx", subset.name), overwrite=T)
