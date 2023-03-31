@@ -12,7 +12,7 @@ rm(list=ls())
 
 # benodigde packages installeren als deze afwezig zijn
 pkg_nodig = c("tidyverse", "survey", "haven", "this.path",
-              "labelled", "openxlsx", "doParallel")
+              "labelled", "openxlsx", "doParallel", "foreach")
 
 for (pkg in pkg_nodig) {
   if (system.file(package = pkg) == "") {
@@ -27,6 +27,7 @@ library(this.path)
 library(labelled)
 library(openxlsx)
 suppressPackageStartupMessages(library(doParallel))
+library(foreach)
 
 # instellen werkmap voor het laden van de andere bestanden
 setwd(dirname(this.path()))
@@ -46,9 +47,9 @@ source("tbl_helpers.R")
   
   # algemene instellingen voor de libraries
   options(survey.lonely.psu="certainty")
-  options("openxlsx.paperSize" = 9) # A4
-  options("openxlsx.orientation" = "landscape")
-  options("openxlsx.numFmt" = "0") # standaardformaat zonder decimalen (anders 0.0 invullen)
+  options("openxlsx.paperSize"=9) # A4
+  options("openxlsx.orientation"="landscape")
+  options("openxlsx.numFmt"="0") # standaardformaat zonder decimalen (anders 0.0 invullen)
   
   # controleren of de configuratie leesbaar is
   tmp = read.xlsx(config.file, sheet="datasets")
@@ -56,12 +57,16 @@ source("tbl_helpers.R")
   rm(tmp)
   
   # zorgen dat de juiste mappen bestaan
-  if (!dir.exists("output")) dir.create("output")
-  if (!dir.exists("resultaten_csv")) dir.create("resultaten_csv")
+  if (!dir.exists("output") || !dir.exists("resultaten_csv")) {
+    if (!dir.exists("output")) dir.create("output")
+    if (!dir.exists("resultaten_csv")) dir.create("resultaten_csv")
+    
+    msg("Mappenstructuur aangemaakt in de map van het configuratiebestand: /output bevat na afloop de tabellenboeken, /resultaten_csv de resultaten van de berekening.", level=MSG)
+  }
   
   # daadwerkelijk inlezen configuratie
   # TODO: onmogelijke waardes checken
-  sheets = c("algemeen", "crossings", "datasets", "indeling_rijen", "onderdelen", "opmaak")
+  sheets = c("algemeen", "crossings", "datasets", "indeling_rijen", "onderdelen", "opmaak", "labelcorrectie")
   for (sheet in sheets) {
     tmp = read.xlsx(config.file, sheet=sheet)
     if (ncol(tmp) == 1) tmp = tmp[[1]]
@@ -72,6 +77,13 @@ source("tbl_helpers.R")
   # variabelelijst afleiden uit de indeling van het tabellenboek;
   # iedere regel met (n)var is een variabele die we nodig hebben
   varlist = indeling_rijen$inhoud[indeling_rijen$type %in% c("var", "nvar")]
+  if (any(duplicated(varlist))) {
+    msg("Let op: variabele(n) %s komen meerdere keren voor in indeling_rijen. Controleer of dit de bedoeling is.",
+        str_c(varlist[duplicated(varlist)], collapse=", "), level=WARN)
+  }
+  if (any(is.na(varlist))) {
+    msg("Let op: regel(s) %s bevat geen variabele. Controleer de configuratie.", level=ERR)
+  }
   varlist = unique(varlist[!is.na(varlist)])
   
   if (any(crossings %in% onderdelen$subset)) {
@@ -86,6 +98,7 @@ source("tbl_helpers.R")
     
     # .sav aan het einde kan vergeten worden...
     if (!str_ends(datasets$bestandsnaam[d], fixed(".sav"))) {
+      datasets$bestandsnaam[d] = paste0(datasets$bestandsnaam[d], ".sav")
       msg("De opgegeven dataset op rij %d eindigt niet in .sav. Mogelijk vergeten? .sav toegevoegd.", level=WARN, d+1)
     }
     
@@ -149,7 +162,20 @@ source("tbl_helpers.R")
     }
   }
   data = data.combined
-  rm(data.combined) # twee keer hetzelfde object is zonde van het geheugen
+  rm(data.combined) # twee keer hetzelfde object is zonde van het geheugen, en data.combined blijven gebruiken geeft ons RSI; data is korter
+  
+  # labels opslaan
+  var_labels = data.frame()
+  for (i in 1:ncol(data)) {
+    colname = colnames(data)[i]
+    if (!is.null(var_label(data[[i]]))) {
+      var_labels = bind_rows(var_labels, data.frame(var=colname, val="var", label=var_label(data[[i]])))
+    }
+    labels = val_labels(data[[i]])
+    if (!is.null(labels)) {
+      var_labels = bind_rows(var_labels, data.frame(var=rep(colname, length(labels)), val=as.character(unname(labels)), label=names(labels)))
+    }
+  }
   
   # dummies maken
   for (c in 1:ncol(data)) {
@@ -172,9 +198,8 @@ source("tbl_helpers.R")
   for (d in 1:nrow(datasets)) {
     strata = sort(unique(data$tbl_strata[data$tbl_dataset == d]))
     for (i in 1:length(strata)) {
-      data$superstrata[data$tbl_dataset == d & data$tbl_strata == strata[i]] = i
+      data$superstrata[data$tbl_dataset == d & data$tbl_strata == strata[i]] = d*1000 + i
     }
-    data$superstrata[data$tbl_dataset == d] = d*1000 + data$superstrata[data$tbl_dataset == d]
   }
   
   data$superweegfactor = data$tbl_weegfactor
@@ -198,7 +223,7 @@ source("tbl_helpers.R")
       data$superweegfactor[is.na(data$superweegfactor)] = as.numeric(algemeen$missing_weegfactoren)
     } else {
       msg("Er zijn %d missende weegfactoren gevonden. Er is geen valide configuratie opgegeven om hiermee om te gaan. Zie de handleiding voor meer informatie.",
-          n, level=MSG)
+          n, level=ERR)
     }
   }
   
@@ -355,9 +380,16 @@ source("tbl_helpers.R")
     kolom_opbouw.identical = T
     for (i in 1:ncol(kolom_opbouw)) {
       # N.B.: je zou verwachten dat identical(x, y) hier zou werken, maar dat blijkt niet zo te zijn
-      # ik ben er niet achter gekomen waarom niet... deze functie werkt in elk geval naar behoren
-      if (!isTRUE(all.equal(unname(kolom_opbouw[,i]), unname(kolom_opbouw.prev[,i]))))
-        kolom_opbouw.identical = F
+      # bij numerieke waarden kan identical() raar doen, bijv. 1,2,3 != 1,2,3 (volgens identical() dan)
+      # andersom doet all.equal het niet goed met kolommen met alleen NA
+      # vandaar dit gedrocht
+      if (!isTRUE(all.equal(unname(kolom_opbouw[,i]), unname(kolom_opbouw.prev[,i])))) {
+        if (!(all(is.na(unname(kolom_opbouw[,i]))) && all(is.na(unname(kolom_opbouw.prev[,i]))))) {
+          msg("Kolom %d (%s) is ongelijk aan de vorige configuratie: %s vs. %s", i, colnames(kolom_opbouw)[i],
+              str_c(unname(kolom_opbouw[,i]), collapse=", "), str_c(unname(kolom_opbouw.prev[,i]), collapse=", "), level=DEBUG)
+          kolom_opbouw.identical = F
+        }
+      }
     }
     
     if (kolom_opbouw.identical && identical(varlist, varlist.prev)) {
@@ -373,10 +405,71 @@ source("tbl_helpers.R")
   if (calc.results) {
     source("tbl_GetTableRow.R")
     results = data.frame()
-    # berekeningen kunnen parallel worden uitgevoerd met multithreading
-    # hierdoor worden meerdere processorkernen ingezet om de berekeningen uit te voeren
-    # (dit kan handig zijn, omdat survey een bijzonder traag pakket is)
-    # TODO: parallel maken
+    
+    # TODO: parallel proberen te maken
+    if (F) {
+      # berekeningen kunnen parallel worden uitgevoerd met multithreading
+      # hierdoor worden meerdere processorkernen ingezet om de berekeningen uit te voeren
+      # (dit kan handig zijn, omdat survey een bijzonder traag pakket is)
+      
+      clus = makeCluster(detectCores())
+      registerDoParallel(clus)
+      
+      
+      #### poging met plyr
+      results = data.frame()
+      
+      PrepdataForSurveyAndGetTableRow = function(
+      var,
+      data.in,
+      kolom_opbouw.in,
+      subsetmatches.in
+      ){
+        source("tbl_GetTableRow.R")
+        vars = c(var, kolom_opbouw.in$crossing, kolom_opbouw.in$subset, colnames(data.in)[str_starts(colnames(data.in), "dummy._col")],
+                 colnames(data.in)[str_starts(colnames(data.in), paste0("dummy.", var))], "superstrata", "superweegfactor")
+        vars = unique(vars[!is.na(vars)])
+        data.in.tmp = data.in[,vars]
+        design = svydesign(ids=~1, strata=data.in.tmp$superstrata, weights=data.in.tmp$superweegfactor, data=data.in.tmp)
+        return(GetTableRow(var, design, kolom_opbouw.in, subsetmatches.in, F))
+      }
+      
+      out <- alply(
+        .data = varlist,
+        .margins = 1,
+        .fun = PrepdataForSurveyAndGetTableRow,
+        data.in = data,
+        kolom_opbouw.in = kolom_opbouw,
+        subsetmatches.in = subsetmatches,
+        .parallel = algemeen$multithreading,
+        .paropts = list(
+          .packages = c("survey", "tidyverse", "labelled")
+        ),
+        .progress = progress_time()
+      )
+      
+      results <- out %>% reduce(.f = bind_rows)
+      
+      stopCluster(clus)
+      
+      
+      #### poging met foreach
+      results = system.time({foreach(var=varlist, .combine=bind_rows, .packages=c("tidyverse", "survey", "labelled")) %dopar% {
+        # we kunnen de dataset die de functie in moet flink verkleinen; alle variabelen
+        # behalve [var], dummy._col[1:n], dummy.[var], de subsets en de crossings kunnen eruit
+        vars = c(var, kolom_opbouw$crossing, kolom_opbouw$subset, colnames(data)[str_starts(colnames(data), "dummy._col")],
+                 colnames(data)[str_starts(colnames(data), paste0("dummy.", var))], "superstrata", "superweegfactor")
+        vars = unique(vars[!is.na(vars)])
+        data.tmp = data[,vars]
+        design = svydesign(ids=~1, strata=data.tmp$superstrata, weights=data.tmp$superweegfactor, data=data.tmp)
+        
+        GetTableRow(var, design, kolom_opbouw, subsetmatches, F)
+      }})
+    }
+    
+    results = data.frame()
+    t.start = proc.time()["elapsed"]
+    t.vars = c()
     for (var in varlist) {
       # we kunnen de dataset die de functie in moet flink verkleinen; alle variabelen
       # behalve [var], dummy._col[1:n], dummy.[var], de subsets en de crossings kunnen eruit
@@ -386,8 +479,13 @@ source("tbl_helpers.R")
       data.tmp = data[,vars]
       design = svydesign(ids=~1, strata=data.tmp$superstrata, weights=data.tmp$superweegfactor, data=data.tmp)
       
-      results = bind_rows(results, GetTableRow(var, design, F, kolom_opbouw, subsetmatches))
+      t.vars = c(t.vars, sys.time(results = bind_rows(results, GetTableRow(var, design, kolom_opbouw, subsetmatches, F)))["elapsed"])
+      
+      msg("Variabele %d/%d berekend; rekentijd %0.1f sec.", which(varlist == var), length(varlist), t.vars[length(t.vars)], level=MSG)
     }
+    t.end = proc.time()["elapsed"]
+    msg("Totale rekentijd %0.2f min voor %d variabelen. Gemiddelde tijd per variabele was %0.1f sec (range %0.1f - %0.1f).",
+        t.end-t.start, length(varlist), mean(t.vars), min(t.vars), max(t.vars), level=MSG)
     
     # resultaten opslaan voor hergebruik
     # N.B.: alles in UTF-8 om problemen met een trema o.i.d. te voorkomen
@@ -397,10 +495,51 @@ source("tbl_helpers.R")
   }
   
   ##### begin wegschrijven tabellenboeken in Excel
+  
+  # zijn er labels om te veranderen?
+  if (nrow(labelcorrectie) > 0) {
+    for (i in 1:nrow(labelcorrectie)) {
+      if (!is.na(labelcorrectie$var[i]) && !(labelcorrectie$var[i] %in% var_labels$var)) {
+        msg("Variabele %s dient volgens de configuratie een nieuw (antwoord)label te krijgen, maar deze is niet aangetroffen in de dataset. (Rij %d.)",
+            labelcorrectie$var[i], i, level=WARN)
+        next
+      }
+      
+      if (!is.na(labelcorrectie$var[i]) && !is.na(labelcorrectie$var_label[i])) {
+        var_labels$label[var_labels$var == labelcorrectie$var[i] & var_labels$val == "var"] = labelcorrectie$var_label[i]
+      }
+      
+      # antwoorden zijn te vervangen op basis van puur tekst, of op basis van variabele
+      # hierdoor kan het zijn dat labelcorrectie$var leeg is, maar antwoord_oud niet
+      if (!is.na(labelcorrectie$antwoord_nieuw[i])) {
+        if (!is.na(labelcorrectie$var[i]) && !(labelcorrectie$var[i] %in% var_labels$var)) {
+          msg("Variabele %s dient volgens de configuratie een nieuw antwoordlabel te krijgen, maar deze is niet aangetroffen in de dataset. (Rij %d.)",
+              labelcorrectie$var[i], i, level=WARN)
+          next
+        }
+        
+        if (is.na(labelcorrectie$antwoord_waarde[i]) && !is.na(labelcorrectie$antwoord_oud[i])) {
+          if (is.na(labelcorrectie$var[i])) {
+            var_labels$label = str_replace(var_labels$label, fixed(labelcorrectie$antwoord_oud[i]), fixed(labelcorrectie$antwoord_nieuw[i]))
+          } else {
+            var_labels$label[var_labels$var == labelcorrectie$var[i]] = str_replace(var_labels$label[var_labels$var == labelcorrectie$var[i]],
+                                                                                    fixed(labelcorrectie$antwoord_oud[i]), fixed(labelcorrectie$antwoord_nieuw[i]))
+          }
+        } else if (!is.na(labelcorrectie$antwoord_waarde[i])) {
+          var_labels$label[var_labels$var == labelcorrectie$var[i] & var_labels$val == labelcorrectie$antwoord_waarde[i]] = labelcorrectie$antwoord_nieuw[i]
+        } else {
+          msg("Labelcorrectie in rij %d is onmogelijk; er is geen waarde of oud antwoord opgegeven.", i, level=WARN)
+        }
+      }
+    }
+  }
+  
+  # uitdraaien tabellenboeken
   source("tbl_MakeExcel.R")
   if (is.null(subsetmatches)) {
     # geen subsets, 1 tabellenboek
-    # TODO: maken
+    msg("Tabellenboek wordt gemaakt: Overzicht.xlsx.", level=MSG)
+    MakeExcel(results, var_labels, kolom_opbouw, NA, NA, subsetmatches)
   } else {
     # wel subsets, meerdere tabellenboeken
     subsetvals = subsetmatches[,1]
@@ -409,7 +548,7 @@ source("tbl_helpers.R")
         next # geen data gevonden voor deze subset, overslaan
       
       msg("Tabellenboek voor %s wordt gemaakt.", names(subsetvals[s]), level=MSG)
-      MakeExcel(results, kolom_opbouw, colnames(subsetmatches)[1], subsetvals[s], subsetmatches)
+      MakeExcel(results, var_labels, kolom_opbouw, colnames(subsetmatches)[1], subsetvals[s], subsetmatches)
     }
   }
 }

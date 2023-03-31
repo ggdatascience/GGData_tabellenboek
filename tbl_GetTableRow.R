@@ -9,6 +9,14 @@
 #
 
 # functie om resultatentabellen met verschillende lengtes te corrigeren naar het juiste formaat
+# dit kan bijvoorbeeld voorkomen als er meerdere antwoordmogelijkheden zijn, maar deze in één (of meer) van de datasets niet allemaal voorkomen
+# bijv.:
+# dataset 1:      dataset 2:
+# 1 - 13          1 - 10
+# 2 - 15          3 - 13
+# 3 - 16          4 - 8
+# hieruit willen we een tabel met 4 rijen waar de resultaten op de goeie locatie staan
+# dit is vooral relevant omdat survey wel alle mogelijkheden weergeeft, maar table() alleen als deze ook in de dataset zitten
 MatchTables = function (weighted, unweighted, is_2d=F) {
   weighted.corr = weighted
   unweighted.corr = unweighted
@@ -45,7 +53,7 @@ MatchTables = function (weighted, unweighted, is_2d=F) {
 
 # TODO: confidence intervals toevoegen
 # col.design = kolom_opbouw
-GetTableRow = function (var, design, calculate.ci=T, col.design, subsetmatches) {
+GetTableRow = function (var, design, col.design, subsetmatches, calculate.ci=T) {
   msg("Variabele %s wordt uitgevoerd over %d kolommen.", var, nrow(col.design), level=MSG)
   
   results = data.frame()

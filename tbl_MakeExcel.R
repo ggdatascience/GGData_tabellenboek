@@ -48,7 +48,7 @@ design = function (var) {
 # subset.val = 197
 # subset.name = "Aalten"
 # i = 7
-MakeExcel = function (results, col.design, subset, subset.val, subsetmatches) {
+MakeExcel = function (results, var_labels, col.design, subset, subset.val, subsetmatches) {
   subset.name = names(subset.val)
   subset.val = unname(subset.val)
   
@@ -74,8 +74,7 @@ MakeExcel = function (results, col.design, subset, subset.val, subsetmatches) {
   style.gray.bg = createStyle(fgFill = "#F2F2F2") # voor afwisselende kolommen/rijen
   
   # instellingen
-  header.col.nrows = 1 # ifelse(opmaak("dubbel"), 2, 1) # aantal rijen per kolomheader
-  header.col.template = "Totaal [naam] [jaar]" # tekstinvulling van de kolomkop -> [naam] en [jaar] worden vervangen.
+  header.col.nrows = ifelse(design("header_stijl") == "dubbel", 2, 1) # aantal rijen per kolomheader
   
   # opslag voor rijen die later aangemaakt of opgemaakt moeten worden
   header.col.rows = numeric(0)
@@ -148,7 +147,7 @@ MakeExcel = function (results, col.design, subset, subset.val, subsetmatches) {
       addStyle(wb, subset.name, style.num, rows=c, cols=3:n.col.total, stack=T)
       data.rows = c(data.rows, c)
       
-      c = c + 2
+      c = c + 1
     } else if (indeling_rijen$type[i] == "var") { # variabele toevoegen
       # benodigde resultaten ophalen, zodat we niet steeds belachelijke selectors nodig hebben
       data.var = data.frame()
@@ -184,7 +183,8 @@ MakeExcel = function (results, col.design, subset, subset.val, subsetmatches) {
       # dit zou in theorie ook zonder for kunnen, maar overzichtelijkheid
       for (j in 1:nrow(col.design)) {
         # TODO: afkappunten met minimale metingen toevoegen
-        output[data.var$val[data.var$col.index == j],j] = data.var$perc.weighted[data.var$col.index == j]
+        # N.B.: as.character() is hier nodig omdat R niet om kan gaan met een numerieke rijnaam 0, maar wel met karakter "0"
+        output[as.character(data.var$val[data.var$col.index == j]),j] = data.var$perc.weighted[data.var$col.index == j]
       }
       
       # significante resultaten zichtbaar maken
@@ -202,7 +202,7 @@ MakeExcel = function (results, col.design, subset, subset.val, subsetmatches) {
       # TODO: tabbladen met dichotoom/niet_dichotoom?
       if (isTRUE(all.equal(levels.var, c(0, 1))) || any(unlist(lapply(dichotoom.vals, function (x) { return(identical(x, levels.var)) })))) {
         output = output %>% as.data.frame() %>% rownames_to_column("val") %>% filter(val == 1) %>%
-          mutate(label=var_label(data[[indeling_rijen$inhoud[[i]]]]),
+          mutate(label=var_labels$label[var_labels$var == indeling_rijen$inhoud[i] & var_labels$val == "var"],
                  matchcode=paste0(indeling_rijen$inhoud[i], val)) %>%
           relocate(matchcode, label) %>%
           select(-val)
@@ -226,15 +226,17 @@ MakeExcel = function (results, col.design, subset, subset.val, subsetmatches) {
       } else { # niet dichotoom
         # labels toevoegen
         output = output %>% as.data.frame() %>% rownames_to_column("val") %>%
-          mutate(label=sapply(val, function(v) val_label(data[[indeling_rijen$inhoud[i]]], v)),
+          mutate(label=sapply(val, function(v) var_labels$label[var_labels$var == indeling_rijen$inhoud[i] & var_labels$val == as.character(v)]),
                  matchcode=paste0(indeling_rijen$inhoud[i], val)) %>%
           relocate(matchcode, label) %>%
           select(-val)
         
-        c = c + 1 # witregel na vorige blok
+        c = c + 1 # witregel na vorig blok
         
         # kop met de vraag toevoegen
-        writeData(wb, subset.name, data.frame(col1=indeling_rijen$inhoud[i], col2=var_label(data[[indeling_rijen$inhoud[i]]])), startCol=1, startRow=c, colNames=F)
+        writeData(wb, subset.name, data.frame(col1=indeling_rijen$inhoud[i],
+                                              col2=var_labels$label[var_labels$var == indeling_rijen$inhoud[i] & var_labels$val == "var"]),
+                  startCol=1, startRow=c, colNames=F)
         addStyle(wb, subset.name, style.subtitle, cols=2:n.col.total, rows=c, stack=T)
         title.rows = c(title.rows, c)
         c = c + 1
@@ -308,12 +310,12 @@ MakeExcel = function (results, col.design, subset, subset.val, subsetmatches) {
     if (!is.na(col.design$subset[i])) {
       col.name = subset.name
       if (col.design$subset[i] != subset) {
-        col.name = val_label(data[[col.design$subset[i]]], subsetmatches[subsetmatches[,1] == subset.val, col.design$subset[i]])
+        col.name = var_labels$label[var_labels$var == col.design$subset[i] & var_labels$val == subsetmatches[subsetmatches[,1] == subset.val, col.design$subset[i]]]
       }
     }
     
     # tekstopmaak is in te stellen in de configuratie -> [naam] en [jaar] worden vervangen
-    output[header.col.nrows, i] = str_replace(str_replace(header.col.template, fixed("[naam]"), col.name), fixed("[jaar]"), col.design$year[i])
+    output[header.col.nrows, i] = str_replace(str_replace(design("header_template"), fixed("[naam]"), col.name), fixed("[jaar]"), col.design$year[i])
   }
   
   for (i in header.col.rows) {
@@ -324,6 +326,18 @@ MakeExcel = function (results, col.design, subset, subset.val, subsetmatches) {
       addStyle(wb, subset.name, style.header.col.crossing, rows=i:(i+header.col.nrows-1), cols=2 + which(!is.na(col.design$crossing)), gridExpand=T, stack=T)
     } else {
       addStyle(wb, subset.name, style.header.col, rows=i:(i+header.col.nrows-1), cols=2 + which(!is.na(col.design$crossing)), gridExpand=T, stack=T)
+    }
+    
+    if (header.col.nrows > 1) {
+      # bovenste rij dikgedrukt, dat zijn de datasets
+      addStyle(wb, subset.name, style.header.col, rows=i, cols=2:n.col.total, gridExpand=T, stack=T)
+      # cellen samenvoegen, zodat de titel goed over de kolommen staat
+      for (dataset in unique(col.design$dataset)) {
+        cols = col.design$col.index[col.design$dataset == dataset]
+        if (length(cols) > 1) {
+          mergeCells(wb, subset.name, cols=cols+2, rows=i)
+        }
+      }
     }
   }
   
