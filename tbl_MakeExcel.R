@@ -72,6 +72,9 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
   style.perc = createStyle(halign="center", valign="center") # percentagetekens
   style.num = createStyle(numFmt="0", halign="center", valign="center") # cijfers -> 0 betekent hele getallen zonder decimalen, 0.0 -> 1 decimaal, etc.
   style.gray.bg = createStyle(fgFill = "#F2F2F2") # voor afwisselende kolommen/rijen
+  style.intro.text = createStyle(wrapText=F)
+  style.intro.header = createStyle(wrapText=F, fontSize=design("kop_size"), textDecoration=design("kop_decoration"))
+  style.intro.title = createStyle(wrapText=F, fontSize=design("titel_size") + 4, textDecoration=design("titel_decoration"))
   
   # instellingen
   header.col.nrows = ifelse(design("header_stijl") == "dubbel", 2, 1) # aantal rijen per kolomheader
@@ -84,9 +87,37 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
   label.oversized.rows = numeric(0)
   
   c = 1 # teller voor rijen in Excel
+  
+  # moet er introtekst bij?
+  if (nrow(intro_tekst) > 0) {
+    intro_tekst$type = str_to_lower(str_trim(intro_tekst$type))
+    intro_tekst$inhoud = str_replace_all(intro_tekst$inhoud, fixed("[naam]"), subset.name)
+    for (i in 1:nrow(intro_tekst)) {
+      output = data.frame(a=intro_tekst$type[i], b=intro_tekst$inhoud[i])
+      writeData(wb, subset.name, output, startCol=1, startRow=c, colNames=F)
+      
+      if (intro_tekst$type[i] == "titel") {
+        addStyle(wb, subset.name, style.intro.title, rows=c, cols=1:2, stack=T)
+        setRowHeights(wb, subset.name, c, design("titel_size") + 6)
+      } else if (intro_tekst$type[i] == "kop") {
+        addStyle(wb, subset.name, style.intro.header, rows=c, cols=1:2, stack=T)
+        setRowHeights(wb, subset.name, c, design("kop_size") + 2)
+      } else {
+        addStyle(wb, subset.name, style.intro.text, rows=c, cols=1:2, stack=T)
+        setRowHeights(wb, subset.name, c, design("rij_hoogte"))
+      }
+      
+      c = c + 1
+    }
+    
+    # extra witregel voor de volgende sectie, tenzij de laatste regel een witregel is
+    if (!is.na(intro_tekst$inhoud[nrow(intro_tekst)])) c = c + 1
+  }
+  
   indeling_rijen$type = str_to_lower(str_trim(indeling_rijen$type))
   n.col = nrow(col.design) # aantal kolommen in de data
   n.col.total = n.col + 2 # aantal kolommen in de sheet (1: matchcode, 2: label)
+  table.start = c
   for (i in 1:nrow(indeling_rijen)) {
     if (indeling_rijen$type[i] %in% c("titel", "kop", "tekst")) { # regel met een titel, kop, of tekst
       # een extra witregel voor koppen of titels
@@ -278,13 +309,13 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
   setColWidths(wb, subset.name, cols=1, hidden=T) # 1e kolom verbergen, die is alleen voor eigen naslag
   setColWidths(wb, subset.name, cols=2, width=design("kolombreedte_antwoorden")) # 2de kolom breder voor de tekstlabels
   setColWidths(wb, subset.name, cols=3:n.col.total, width=design("kolombreedte")) # 3 tot nde kolom vaste breedte
-  setRowHeights(wb, subset.name, rows=1:c, heights=design("rij_hoogte"))
+  setRowHeights(wb, subset.name, rows=table.start:c, heights=design("rij_hoogte")) # normale rijhoogte, ná de intro
   
   if (length(label.oversized.rows) > 0) {
     setRowHeights(wb, subset.name, rows=label.oversized.rows, heights=design("rij_hoogte")*2)
   }
   
-  addStyle(wb, subset.name, createStyle(wrapText=T), rows=1:c, cols=1:n.col.total, gridExpand=T, stack=T)
+  addStyle(wb, subset.name, createStyle(wrapText=T), rows=table.start:c, cols=1:n.col.total, gridExpand=T, stack=T)
   addStyle(wb, subset.name, createStyle(fgFill="#ffffff"), rows=which(!1:c %in% title.rows), cols=1:n.col.total, gridExpand=T, stack=T)
   
   # headers toevoegen
@@ -311,6 +342,13 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
       col.name = subset.name
       if (col.design$subset[i] != subset) {
         col.name = var_labels$label[var_labels$var == col.design$subset[i] & var_labels$val == subsetmatches[subsetmatches[,1] == subset.val, col.design$subset[i]]]
+      }
+    }
+    
+    # als er afkortingen zijn: deze toevoegen
+    if (nrow(headers_afkortingen) > 0) {
+      for (j in 1:nrow(headers_afkortingen)) {
+        col.name = str_replace(col.name, fixed(headers_afkortingen$tekst[j]), headers_afkortingen$vervanging[j])
       }
     }
     
@@ -373,6 +411,24 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
   }
   
   # TODO: borders om de tabellen?
+  
+  # plaatjes toevoegen?
+  if (nrow(logos) > 0) {
+    for (i in 1:nrow(logos)) {
+      rij = logos$rij[i]
+      kolom = logos$kolom[i]
+      # bij negatieve waarden doen we aantal - waarde
+      if (rij < 0) {
+        rij = c - abs(rij)
+      }
+      if (kolom < 0) {
+        kolom = n.col.total - abs(kolom) + 1
+      }
+      
+      insertImage(wb, naam_sheet, file=logos$bestand[i], width=logos$breedte[i], height=logos$hoogte[i], units="px",
+                  startRow=rij, startCol=kolom)
+    }
+  }
 
   
   # en als laatste... opslaan!

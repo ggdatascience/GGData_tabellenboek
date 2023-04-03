@@ -66,7 +66,7 @@ source("tbl_helpers.R")
   
   # daadwerkelijk inlezen configuratie
   # TODO: onmogelijke waardes checken
-  sheets = c("algemeen", "crossings", "datasets", "indeling_rijen", "onderdelen", "opmaak", "labelcorrectie")
+  sheets = c("algemeen", "crossings", "datasets", "indeling_rijen", "onderdelen", "opmaak", "labelcorrectie", "logos", "intro_tekst", "headers_afkortingen")
   for (sheet in sheets) {
     tmp = read.xlsx(config.file, sheet=sheet)
     if (ncol(tmp) == 1) tmp = tmp[[1]]
@@ -244,9 +244,6 @@ source("tbl_helpers.R")
         # uitzoeken welke kolom tegenhanger moet zijn van de chi square
         if (onderdelen$sign_crossing[i] == "intern") {
           test.col = 0 # 0 betekent andere waarden van de crossing
-        } else if (str_detect(onderdelen$sign_crossing[i], "^\\d+$")) {
-          # nummer gegeven; dat moet een kolomindex zijn
-          test.col = as.numeric(onderdelen$sign_crossing[i])
         } else {
           # geen toets
           test.col = NA
@@ -477,7 +474,11 @@ source("tbl_helpers.R")
                colnames(data)[str_starts(colnames(data), paste0("dummy.", var))], "superstrata", "superweegfactor")
       vars = unique(vars[!is.na(vars)])
       data.tmp = data[,vars]
-      design = svydesign(ids=~1, strata=data.tmp$superstrata, weights=data.tmp$superweegfactor, data=data.tmp)
+      if ("weegfactor" %in% colnames(indeling_rijen) && !is.na(indeling_rijen$weegfactor[indeling_rijen$inhoud == var])) {
+        design = svydesign(ids=~1, strata=data.tmp$superstrata, weights=indeling_rijen$weegfactor[indeling_rijen$inhoud == var], data=data.tmp)
+      } else {
+        design = svydesign(ids=~1, strata=data.tmp$superstrata, weights=data.tmp$superweegfactor, data=data.tmp)
+      }
       
       t.vars = c(t.vars, sys.time(results = bind_rows(results, GetTableRow(var, design, kolom_opbouw, subsetmatches, F)))["elapsed"])
       
