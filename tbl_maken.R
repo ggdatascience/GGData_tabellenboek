@@ -423,6 +423,8 @@ source("tbl_helpers.R")
       subsetmatches.in
       ){
         source("tbl_GetTableRow.R")
+        source("tbl_helpers.R")
+        options(survey.lonely.psu="certainty")
         vars = c(var, kolom_opbouw.in$crossing, kolom_opbouw.in$subset, colnames(data.in)[str_starts(colnames(data.in), "dummy._col")],
                  colnames(data.in)[str_starts(colnames(data.in), paste0("dummy.", var))], "superstrata", "superweegfactor")
         vars = unique(vars[!is.na(vars)])
@@ -480,9 +482,12 @@ source("tbl_helpers.R")
         design = svydesign(ids=~1, strata=data.tmp$superstrata, weights=data.tmp$superweegfactor, data=data.tmp)
       }
       
-      t.vars = c(t.vars, sys.time(results = bind_rows(results, GetTableRow(var, design, kolom_opbouw, subsetmatches, F)))["elapsed"])
+      t.before = proc.time()["elapsed"]
+      results = bind_rows(results, GetTableRow(var, design, kolom_opbouw, subsetmatches, F))
+      t.after = proc.time()["elapsed"]
+      t.vars = c(t.vars, t.after-t.before)
       
-      msg("Variabele %d/%d berekend; rekentijd %0.1f sec.", which(varlist == var), length(varlist), t.vars[length(t.vars)], level=MSG)
+      msg("Variabele %d/%d berekend; rekentijd %0.1f sec.", which(varlist == var), length(varlist), t.after-t.before, level=MSG)
     }
     t.end = proc.time()["elapsed"]
     msg("Totale rekentijd %0.2f min voor %d variabelen. Gemiddelde tijd per variabele was %0.1f sec (range %0.1f - %0.1f).",
