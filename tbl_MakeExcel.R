@@ -48,7 +48,9 @@ design = function (var) {
 # subset.val = 197
 # subset.name = "Aalten"
 # i = 7
-MakeExcel = function (results, var_labels, col.design, subset, subset.val, subsetmatches) {
+
+MakeExcel = function (results, var_labels, col.design, subset, subset.val, subsetmatches,
+min_observaties_per_vraag,min_observaties_per_antwoord, tekst_min_vraag_niet_gehaald, tekst_min_antwoord_niet_gehaald) {
   subset.name = names(subset.val)
   subset.val = unname(subset.val)
   
@@ -168,7 +170,12 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
           output[j] = max(n$n, na.rm=T)
         }
       }
-      
+      #PS: Aantallen die lager dan min. per vraag uitvallen vervangen. 
+      #Matrix veranderd door vervanging in string. Geen impact op output in Excel.
+      if(!is.null(min_observaties_per_vraag)){
+       output[output < min_observaties_per_vraag] <- tekst_min_vraag_niet_gehaald
+      }      
+
       # ruimte vrijhouden voor het later invoegen van headers
       header.col.rows = c(header.col.rows, c)
       c = c + header.col.nrows
@@ -216,6 +223,23 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
         # TODO: afkappunten met minimale metingen toevoegen
         # N.B.: as.character() is hier nodig omdat R niet om kan gaan met een numerieke rijnaam 0, maar wel met karakter "0"
         output[as.character(data.var$val[data.var$col.index == j]),j] = data.var$perc.weighted[data.var$col.index == j]
+
+#PS: round(,2) toegevoegd
+        #Vervangen van cellen met te lage aantallen forceert dat de matrix een character matrix wordt
+        #Door deze conversie blijven de volledige getallen bewaard als character en zal Excel ze niet
+        #zelf afronden. Percentages moeten dus voor deze conversie afgerond worden
+        output[data.var$val[data.var$col.index == j],j] = round(data.var$perc.weighted[data.var$col.index == j],2)
+        
+        
+        #PS:
+        #Metingen die o.b.v te lage aantallen zijn vervangen        
+        #Alle percentages wegstrepen als tenminste 1 van de aantallen per antwoord te klein is.
+        if(any(data.var$n.unweighted[data.var$col.index == j] < min_observaties_per_antwoord))
+          output[data.var$val[data.var$col.index == j],j] <- tekst_min_antwoord_niet_gehaald
+         
+        #Alle percentages wegstrepen als aantallen per groep te klein zijn.
+        if(sum(data.var$n.unweighted[data.var$col.index == j]) < min_observaties_per_vraag)
+          output[data.var$val[data.var$col.index == j],j] <- tekst_min_vraag_niet_gehaald
       }
       
       # significante resultaten zichtbaar maken
