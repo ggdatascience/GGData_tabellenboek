@@ -549,7 +549,11 @@ source("tbl_helpers.R")
         next # geen data gevonden voor deze subset, overslaan
       
       msg("Tabellenboek voor %s wordt gemaakt.", names(subsetvals[s]), level=MSG)
-      MakeExcel(results, var_labels, kolom_opbouw, colnames(subsetmatches)[1], subsetvals[s], subsetmatches)
+      MakeExcel(results, var_labels, kolom_opbouw, colnames(subsetmatches)[1], subsetvals[s], subsetmatches,
+                min_observaties_per_vraag = algemeen$min_observaties_per_vraag,
+                min_observaties_per_antwoord = algemeen$min_observaties_per_antwoord,
+                tekst_min_vraag_niet_gehaald = algemeen$tekst_min_vraag_niet_gehaald,
+                tekst_min_antwoord_niet_gehaald = algemeen$tekst_min_antwoord_niet_gehaald)
     }
   }
 }
