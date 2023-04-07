@@ -39,10 +39,10 @@ source("tbl_helpers.R")
   # selecteren configuratiebestand en bijbehorende werkmap
   # hierin dienen de configuratie(.xlsx) en de databestanden (in de map data) te staan
   # andere mappen worden automatisch aangemaakt als deze niet bestaan
-  #config.file = choose.files(caption="Selecteer configuratiebestand...",
-  #                           filters=c("Excel-bestand (*.xlsx)","*.xlsx"),
-  #                           multi=F)
-  config.file = "configuratieVO.xlsx"
+  config.file = choose.files(caption="Selecteer configuratiebestand...",
+                             filters=c("Excel-bestand (*.xlsx)","*.xlsx"),
+                             multi=F)
+  #config.file = "configuratieVO.xlsx"
   if (!str_ends(config.file, ".xlsx")) msg("Configuratiebestand dient een Excel-bestand te zijn.", ERR)
   setwd(dirname(config.file))
   
