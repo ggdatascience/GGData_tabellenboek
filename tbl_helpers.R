@@ -45,3 +45,23 @@ msg = function (msg, ..., level = DEBUG) {
       print(msg)
   }
 }
+
+# identical() blijkt niet altijd goed te werken
+# bij numerieke waarden kan identical() raar doen, bijv. 1,2,3 != 1,2,3 (volgens identical() dan)
+# andersom doet all.equal het niet goed met kolommen met alleen NA
+# vandaar dit gedrocht
+identical.enough = function (x, y) {
+  if (!all(dim(x) == dim(y))) {
+    return(F)
+  }
+  
+  is.identical = T
+  for (i in 1:ncol(x)) {
+    if (!isTRUE(all.equal(unname(x[,i]), unname(y[,i])))) {
+      if (!(all(is.na(unname(x[,i]))) && all(is.na(unname(y[,i]))))) {
+        is.identical = F
+      }
+    }
+  }
+  return(is.identical)
+}

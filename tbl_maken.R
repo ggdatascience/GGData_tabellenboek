@@ -2,9 +2,10 @@
 #
 # Dit script maakt tabellenboeken op basis van gezondheidsmonitors. 
 # De configuratie gaat middels een Excelsheet, zie bijgevoegde documentatie.
-# Bugs en verzoeken kunnen worden ingediend op:
-# -> https://github.com/aartdijkstra/GGData_tabellenboek
+# Problemen en verzoeken kunnen worden ingediend op:
+# https://github.com/ggdatascience/GGData_tabellenboek
 #
+# Versie: concept
 #
 
 # alle huidige data uit de sessie verwijderen
@@ -41,7 +42,7 @@ source("tbl_helpers.R")
   #config.file = choose.files(caption="Selecteer configuratiebestand...",
   #                           filters=c("Excel-bestand (*.xlsx)","*.xlsx"),
   #                           multi=F)
-  config.file = "configuratie.xlsx"
+  config.file = "configuratieVO.xlsx"
   if (!str_ends(config.file, ".xlsx")) msg("Configuratiebestand dient een Excel-bestand te zijn.", ERR)
   setwd(dirname(config.file))
   
@@ -76,15 +77,21 @@ source("tbl_helpers.R")
   
   # variabelelijst afleiden uit de indeling van het tabellenboek;
   # iedere regel met (n)var is een variabele die we nodig hebben
-  varlist = indeling_rijen$inhoud[indeling_rijen$type %in% c("var", "nvar")]
-  if (any(duplicated(varlist))) {
+  varlist = indeling_rijen[indeling_rijen$type %in% c("var", "nvar"),]
+  if (any(duplicated(varlist$inhoud))) {
     msg("Let op: variabele(n) %s komen meerdere keren voor in indeling_rijen. Controleer of dit de bedoeling is.",
         str_c(varlist[duplicated(varlist)], collapse=", "), level=WARN)
   }
-  if (any(is.na(varlist))) {
+  if (any(is.na(varlist$inhoud))) {
     msg("Let op: regel(s) %s bevat geen variabele. Controleer de configuratie.", level=ERR)
   }
-  varlist = unique(varlist[!is.na(varlist)])
+  # mogelijke weegfactoren opslaan voor later gebruik (zie de berekeningsloop)
+  weight.factors = indeling_rijen %>%
+    select(starts_with("weegfactor")) %>%
+    lapply(function (v) {
+      output = unique(v)
+      return(output[!is.na(output)])
+    }) %>% unlist() %>% unname()
   
   if (any(crossings %in% onderdelen$subset)) {
     msg("De variabele(n) %s is/zijn ingevuld als crossing en subset. Een subset kan niet met zichzelf gekruist worden.",
@@ -130,14 +137,35 @@ source("tbl_helpers.R")
       if (colname %in% colnames(data.combined)) {
         existing = data.combined[[which(colnames(data.combined) == colname)]]
         # controleren of het type en, indien relevant, factors overeenkomen
-        if (!(identical(var_label(data[[c]]), var_label(existing)) && all(val_labels(data[[c]]) == val_labels(existing)))) {
+        # hierbij kan er tussen jaren best wat verschil zitten in het label, dus de labelcheck is optioneel
+        if (algemeen$vergelijk_variabelelabels) {
+          if (!identical(var_label(data[[c]]), var_label(existing))) {
+            afwijkend = c(afwijkend, c)
+          } 
+        } else {
+          # zorg dat het oude label bewaard blijft, aangezien de eerste dataset waarschijnlijk de meest recente is
+          var_label(data[[c]]) = var_label(existing)
+        }
+        
+        if (is.null(val_labels(data[[c]])) && is.null(val_labels(existing))) next
+        
+        # weer zo'n gek ding: als je val_labels(x) == val_labels(y) doet met verschillende lengtes
+        # telt het alsnog als TRUE, zo lang de overeenkomende waardes maar gelijk zijn
+        if (length(val_labels(data[[c]])) != length(val_labels(existing))) {
+          msg("Antwoordopties voor variabele %s komen niet overeen tussen datasets. In dataset %s zijn %d optie(s) aanwezig (%s), in de datasets daarvoor %d (%s). Deze waardes worden gecombineerd met de eerder bekende labels als leidraad.",
+              colname, datasets$naam_dataset[d], length(val_labels(data[[c]])), str_c(names(val_labels(data[[c]])), collapse=", "),
+              length(val_labels(existing)), str_c(names(val_labels(existing)), collapse=", "), level=WARN)
+        }
+        
+        if (all(val_labels(data[[c]]) != val_labels(existing))) {
           afwijkend = c(afwijkend, c)
         }
       }
     }
+    afwijkend = unique(afwijkend)
     
     # herschrijven kolomnamen zodat ze niet gaan storen
-    msg("Afwijkende kolommen in dataset %d: %s", d, str_c(colnames(data)[afwijkend], collapse=","))
+    msg("Afwijkende kolommen in dataset %d: %s", d, str_c(colnames(data)[afwijkend], collapse=","), level=WARN)
     if (length(afwijkend) > 0) colnames(data)[afwijkend] = paste0("_", d, "_", colnames(data)[afwijkend])
     
     # zijn er weegfactoren aangetroffen? zo nee, is dat de bedoeling?
@@ -180,7 +208,7 @@ source("tbl_helpers.R")
   # dummies maken
   for (c in 1:ncol(data)) {
     colname = colnames(data)[c]
-    if (!(colname %in% varlist) && !(colname %in% crossings)) next
+    if (!(colname %in% varlist$inhoud) && !(colname %in% crossings)) next
     if (str_starts(colname, "_") || str_starts(colname, "dummy")) next
     
     if (is.null(val_labels(data[[c]]))) next
@@ -372,24 +400,9 @@ source("tbl_helpers.R")
       file.exists(sprintf("resultaten_csv/vars_%s.csv", basename(config.file)))) {
     results = read.csv(sprintf("resultaten_csv/results_%s.csv", basename(config.file)), fileEncoding="UTF-8")
     kolom_opbouw.prev = read.csv(sprintf("resultaten_csv/settings_%s.csv", basename(config.file)), fileEncoding="UTF-8")
-    varlist.prev = read.csv(sprintf("resultaten_csv/vars_%s.csv", basename(config.file)), fileEncoding="UTF-8")[,1]
+    varlist.prev = read.csv(sprintf("resultaten_csv/vars_%s.csv", basename(config.file)), fileEncoding="UTF-8")
     
-    kolom_opbouw.identical = T
-    for (i in 1:ncol(kolom_opbouw)) {
-      # N.B.: je zou verwachten dat identical(x, y) hier zou werken, maar dat blijkt niet zo te zijn
-      # bij numerieke waarden kan identical() raar doen, bijv. 1,2,3 != 1,2,3 (volgens identical() dan)
-      # andersom doet all.equal het niet goed met kolommen met alleen NA
-      # vandaar dit gedrocht
-      if (!isTRUE(all.equal(unname(kolom_opbouw[,i]), unname(kolom_opbouw.prev[,i])))) {
-        if (!(all(is.na(unname(kolom_opbouw[,i]))) && all(is.na(unname(kolom_opbouw.prev[,i]))))) {
-          msg("Kolom %d (%s) is ongelijk aan de vorige configuratie: %s vs. %s", i, colnames(kolom_opbouw)[i],
-              str_c(unname(kolom_opbouw[,i]), collapse=", "), str_c(unname(kolom_opbouw.prev[,i]), collapse=", "), level=DEBUG)
-          kolom_opbouw.identical = F
-        }
-      }
-    }
-    
-    if (kolom_opbouw.identical && identical(varlist, varlist.prev)) {
+    if (identical.enough(kolom_opbouw, kolom_opbouw.prev) && identical.enough(varlist, varlist.prev)) {
       msg("Eerdere resultaten aangetroffen vanuit deze configuratie (%s). Berekening wordt overgeslagen. Indien er nieuwe data is toegevoegd, verwijder dan de bestanden uit de map resultaten_csv.",
           basename(config.file), level=MSG)
       
@@ -453,45 +466,138 @@ source("tbl_helpers.R")
       
       
       #### poging met foreach
-      results = system.time({foreach(var=varlist, .combine=bind_rows, .packages=c("tidyverse", "survey", "labelled")) %dopar% {
+      clus = makeCluster(detectCores())
+      registerDoParallel(clus)
+      
+      t.start = proc.time()["elapsed"]
+      results = foreach(var=varlist, .combine=bind_rows, .packages=c("tidyverse", "survey", "labelled")) %dopar% {
+        var = varlist$inhoud[i]
         # we kunnen de dataset die de functie in moet flink verkleinen; alle variabelen
         # behalve [var], dummy._col[1:n], dummy.[var], de subsets en de crossings kunnen eruit
         vars = c(var, kolom_opbouw$crossing, kolom_opbouw$subset, colnames(data)[str_starts(colnames(data), "dummy._col")],
-                 colnames(data)[str_starts(colnames(data), paste0("dummy.", var))], "superstrata", "superweegfactor")
+                 colnames(data)[str_starts(colnames(data), paste0("dummy.", var))], "superstrata", "superweegfactor",
+                 "tbl_dataset", weight.factors)
         vars = unique(vars[!is.na(vars)])
         data.tmp = data[,vars]
-        design = svydesign(ids=~1, strata=data.tmp$superstrata, weights=data.tmp$superweegfactor, data=data.tmp)
         
-        GetTableRow(var, design, kolom_opbouw, subsetmatches, F)
-      }})
+        # nu wordt het ingewikkeld: in de monitor VO zijn verschillende weegfactoren nodig per jaar
+        # dit betekent dat we per variabele EN per dataset een andere weegfactor kunnen hebben
+        # daarvoor kan een combinatieweegfactor gemaakt worden, als er gewerkt wordt met één groot combinatiebestand,
+        # of er kan een 'superweegfactor' gemaakt worden, gelijkend aan de superweegfactor die door combinatie hierboven ontstaan is
+        # aangezien niet alle GGD'en een overkoepelend bestand hebben is hier gekozen voor de tweede optie
+        # gezien de complexiteit wordt deze code lelijk, daar is helaas weinig aan te doen
+        
+        if (any(str_detect(colnames(varlist), "weegfactor"))) {
+          # tijd om te huilen
+          # mogelijke opties:
+          # "weegfactor" -> override voor die variabele
+          # "weegfactor.d[getal]" -> override voor die variabele in dataset [getal]
+          # "weegfactor.d_[naam]" -> override voor die variabele in dataset [naam]
+          weegfactorvars = str_match(colnames(varlist), "weegfactor(.*)")
+          weegfactorvars = weegfactorvars[!is.na(weegfactorvars)[,1],]
+          
+          for (j in 1:nrow(weegfactorvars)) {
+            wfname = weegfactorvars[j,1]
+            wfdataset = weegfactorvars[j,2]
+            
+            if (wfname == "weegfactor" && !is.na(varlist$weegfactor[j])) {
+              data.tmp$superweegfactor = data.tmp[[varlist$weegfactor[j]]]
+            } else if (!is.na(varlist[[wfname]][i]) && str_detect(wfdataset, "^\\.d(\\d+)$")) { # numeriek, dus d[getal]
+              dataset = as.numeric(str_match(wfdataset, "(\\d)+")[,2])
+              data.tmp$superweegfactor[data.tmp$tbl_dataset == dataset] = data.tmp[[varlist[[wfname]][j]]][data.tmp$tbl_dataset == dataset]
+            } else if (!is.na(varlist[[wfname]][i]) && str_detect(wfdataset, "^\\.d_(.+)")) { # naam van een dataset
+              dataset = str_match(wfdataset, "^\\.d_(.+)")[,2]
+              if (!dataset %in% datasets$naam_dataset) {
+                msg("Er is een weegfactor opgegeven in indeling_rijen voor dataset %s, maar deze dataset is niet bekend. Controleer de configuratie.", dataset, level=ERR)
+              }
+              dataset = which(datasets$naam_dataset == dataset)
+              data.tmp$superweegfactor[data.tmp$tbl_dataset == dataset] = data.tmp[[varlist[[wfname]][j]]][data.tmp$tbl_dataset == dataset]
+            } else if (!is.na(varlist[[wfname]][i])) {
+              msg("Onbekende weegfactordefinitie opgegeven: %s. Controleer de configuratie.", wfname, level=ERR)
+            }
+          }
+        }
+        
+        design = svydesign(ids=~1, strata=data.tmp$superstrata, weights=data.tmp$superweegfactor, data=data.tmp)
+
+        results = bind_rows(results, GetTableRow(var, design, kolom_opbouw, subsetmatches, F))
+      }
+      t.end = proc.time()["elapsed"]
+      msg("Totale rekentijd %0.2f min voor %d variabelen. Gemiddelde tijd per variabele was %0.1f sec.",
+          (t.end-t.start)/60, nrow(varlist), t.end-t.start/nrow(varlist), level=MSG)
+      
+      stopCluster(clus)
     }
     
     results = data.frame()
     t.start = proc.time()["elapsed"]
     t.vars = c()
-    for (var in varlist) {
+    for (i in 1:nrow(varlist)) {
+      var = varlist$inhoud[i]
+      
+      if (!var %in% colnames(data)) {
+        msg("Variabele %s is wel opgegeven in indeling_rijen, maar komt niet voor in de dataset. Controleer de configuratie.", var, level=WARN)
+        next
+      }
+      
       # we kunnen de dataset die de functie in moet flink verkleinen; alle variabelen
       # behalve [var], dummy._col[1:n], dummy.[var], de subsets en de crossings kunnen eruit
       vars = c(var, kolom_opbouw$crossing, kolom_opbouw$subset, colnames(data)[str_starts(colnames(data), "dummy._col")],
-               colnames(data)[str_starts(colnames(data), paste0("dummy.", var))], "superstrata", "superweegfactor")
+               colnames(data)[str_starts(colnames(data), paste0("dummy.", var))], "superstrata", "superweegfactor",
+               "tbl_dataset", weight.factors)
       vars = unique(vars[!is.na(vars)])
       data.tmp = data[,vars]
-      if ("weegfactor" %in% colnames(indeling_rijen) && !is.na(indeling_rijen$weegfactor[indeling_rijen$inhoud == var])) {
-        design = svydesign(ids=~1, strata=data.tmp$superstrata, weights=indeling_rijen$weegfactor[indeling_rijen$inhoud == var], data=data.tmp)
-      } else {
-        design = svydesign(ids=~1, strata=data.tmp$superstrata, weights=data.tmp$superweegfactor, data=data.tmp)
+      
+      # nu wordt het ingewikkeld: in de monitor VO zijn verschillende weegfactoren nodig per jaar
+      # dit betekent dat we per variabele EN per dataset een andere weegfactor kunnen hebben
+      # daarvoor kan een combinatieweegfactor gemaakt worden, als er gewerkt wordt met één groot combinatiebestand,
+      # of er kan een 'superweegfactor' gemaakt worden, gelijkend aan de superweegfactor die door combinatie hierboven ontstaan is
+      # aangezien niet alle GGD'en een overkoepelend bestand hebben is hier gekozen voor de tweede optie
+      # gezien de complexiteit wordt deze code lelijk, daar is helaas weinig aan te doen
+      
+      if (any(str_detect(colnames(varlist), "weegfactor"))) {
+        # tijd om te huilen
+        # mogelijke opties:
+        # "weegfactor" -> override voor die variabele
+        # "weegfactor.d[getal]" -> override voor die variabele in dataset [getal]
+        # "weegfactor.d_[naam]" -> override voor die variabele in dataset [naam]
+        weegfactorvars = str_match(colnames(varlist), "weegfactor(.*)")
+        weegfactorvars = weegfactorvars[!is.na(weegfactorvars)[,1],]
+        
+        for (j in 1:nrow(weegfactorvars)) {
+          wfname = weegfactorvars[j,1]
+          wfdataset = weegfactorvars[j,2]
+          
+          if (wfname == "weegfactor" && !is.na(varlist$weegfactor[j])) {
+            data.tmp$superweegfactor = data.tmp[[varlist$weegfactor[j]]]
+          } else if (!is.na(varlist[[wfname]][i]) && str_detect(wfdataset, "^\\.d(\\d+)$")) { # numeriek, dus d[getal]
+            dataset = as.numeric(str_match(wfdataset, "(\\d)+")[,2])
+            data.tmp$superweegfactor[data.tmp$tbl_dataset == dataset] = data.tmp[[varlist[[wfname]][j]]][data.tmp$tbl_dataset == dataset]
+          } else if (!is.na(varlist[[wfname]][i]) && str_detect(wfdataset, "^\\.d_(.+)")) { # naam van een dataset
+            dataset = str_match(wfdataset, "^\\.d_(.+)")[,2]
+            if (!dataset %in% datasets$naam_dataset) {
+              msg("Er is een weegfactor opgegeven in indeling_rijen voor dataset %s, maar deze dataset is niet bekend. Controleer de configuratie.", dataset, level=ERR)
+            }
+            dataset = which(datasets$naam_dataset == dataset)
+            data.tmp$superweegfactor[data.tmp$tbl_dataset == dataset] = data.tmp[[varlist[[wfname]][i]]][data.tmp$tbl_dataset == dataset]
+          } else if (!is.na(varlist[[wfname]][i])) {
+            msg("Onbekende weegfactordefinitie opgegeven: %s. Controleer de configuratie.", wfname, level=ERR)
+          }
+        }
       }
+      
+      design = svydesign(ids=~1, strata=data.tmp$superstrata, weights=data.tmp$superweegfactor, data=data.tmp)
       
       t.before = proc.time()["elapsed"]
       results = bind_rows(results, GetTableRow(var, design, kolom_opbouw, subsetmatches, F))
       t.after = proc.time()["elapsed"]
       t.vars = c(t.vars, t.after-t.before)
       
-      msg("Variabele %d/%d berekend; rekentijd %0.1f sec.", which(varlist == var), length(varlist), t.after-t.before, level=MSG)
+      msg("Variabele %d/%d berekend; rekentijd %0.1f sec.", i, nrow(varlist), t.after-t.before, level=MSG)
     }
     t.end = proc.time()["elapsed"]
     msg("Totale rekentijd %0.2f min voor %d variabelen. Gemiddelde tijd per variabele was %0.1f sec (range %0.1f - %0.1f).",
-        t.end-t.start, length(varlist), mean(t.vars), min(t.vars), max(t.vars), level=MSG)
+        (t.end-t.start)/60, nrow(varlist), mean(t.vars), min(t.vars), max(t.vars), level=MSG)
     
     # resultaten opslaan voor hergebruik
     # N.B.: alles in UTF-8 om problemen met een trema o.i.d. te voorkomen
@@ -554,11 +660,7 @@ source("tbl_helpers.R")
         next # geen data gevonden voor deze subset, overslaan
       
       msg("Tabellenboek voor %s wordt gemaakt.", names(subsetvals[s]), level=MSG)
-      MakeExcel(results, var_labels, kolom_opbouw, colnames(subsetmatches)[1], subsetvals[s], subsetmatches,
-                min_observaties_per_vraag = algemeen$min_observaties_per_vraag,
-                min_observaties_per_antwoord = algemeen$min_observaties_per_antwoord,
-                tekst_min_vraag_niet_gehaald = algemeen$tekst_min_vraag_niet_gehaald,
-                tekst_min_antwoord_niet_gehaald = algemeen$tekst_min_antwoord_niet_gehaald)
+      MakeExcel(results, var_labels, kolom_opbouw, colnames(subsetmatches)[1], subsetvals[s], subsetmatches)
     }
   }
 }

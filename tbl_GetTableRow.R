@@ -51,8 +51,8 @@ MatchTables = function (weighted, unweighted, is_2d=F) {
   return(list(weighted.corr, unweighted.corr))
 }
 
-# TODO: confidence intervals toevoegen
 # col.design = kolom_opbouw
+# s = 43
 GetTableRow = function (var, design, col.design, subsetmatches, calculate.ci=T) {
   msg("Variabele %s wordt uitgevoerd over %d kolommen.", var, nrow(col.design), level=MSG)
   

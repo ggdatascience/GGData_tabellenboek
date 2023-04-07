@@ -49,8 +49,7 @@ design = function (var) {
 # subset.name = "Aalten"
 # i = 7
 
-MakeExcel = function (results, var_labels, col.design, subset, subset.val, subsetmatches,
-min_observaties_per_vraag,min_observaties_per_antwoord, tekst_min_vraag_niet_gehaald, tekst_min_antwoord_niet_gehaald) {
+MakeExcel = function (results, var_labels, col.design, subset, subset.val, subsetmatches) {
   subset.name = names(subset.val)
   subset.val = unname(subset.val)
   
@@ -87,6 +86,13 @@ min_observaties_per_vraag,min_observaties_per_antwoord, tekst_min_vraag_niet_geh
   title.rows = numeric(0)
   perc.rows = numeric(0)
   label.oversized.rows = numeric(0)
+  
+  # constantes voor het vervangen van cellen met te weinig antwoorden
+  # dit is nodig omdat bij het direct plaatsen van tekst de hele matrix een karakter wordt
+  # dan werkt de weergave in procenten in Excel niet goed meer
+  A_TOOSMALL = -1
+  Q_TOOSMALL = -2
+  Q_MISSING = -3
   
   c = 1 # teller voor rijen in Excel
   
@@ -182,6 +188,11 @@ min_observaties_per_vraag,min_observaties_per_antwoord, tekst_min_vraag_niet_geh
       
       c = c + 1
     } else if (indeling_rijen$type[i] == "var") { # variabele toevoegen
+      if (!indeling_rijen$inhoud[i] %in% colnames(data)) {
+        msg("Variabele %s komt niet voor in de resultaten. Deze wordt overgeslagen. Controleer de configuratie.", indeling_rijen$inhoud[i], level=WARN)
+        next
+      }
+      
       # benodigde resultaten ophalen, zodat we niet steeds belachelijke selectors nodig hebben
       data.var = data.frame()
       for (j in 1:nrow(col.design)) {
@@ -218,22 +229,18 @@ min_observaties_per_vraag,min_observaties_per_antwoord, tekst_min_vraag_niet_geh
         # N.B.: as.character() is hier nodig omdat R niet om kan gaan met een numerieke rijnaam 0, maar wel met karakter "0"
         vals = as.character(data.var$val[data.var$col.index == j])
         output[vals,j] = data.var$perc.weighted[data.var$col.index == j]
-
-        #PS: round(,2) toegevoegd
-        #Vervangen van cellen met te lage aantallen forceert dat de matrix een character matrix wordt
-        #Door deze conversie blijven de volledige getallen bewaard als character en zal Excel ze niet
-        #zelf afronden. Percentages moeten dus voor deze conversie afgerond worden
-        output[vals,j] = round(data.var$perc.weighted[data.var$col.index == j],2)
         
         #PS:
-        #Metingen die o.b.v te lage aantallen zijn vervangen        
-        #Alle percentages wegstrepen als tenminste 1 van de aantallen per antwoord te klein is.
-        if(any(data.var$n.unweighted[data.var$col.index == j] < min_observaties_per_antwoord, na.rm=T))
-          output[vals,j] <- tekst_min_antwoord_niet_gehaald
-         
-        #Alle percentages wegstrepen als aantallen per groep te klein zijn.
-        if(sum(data.var$n.unweighted[data.var$col.index == j], na.rm=T) < min_observaties_per_vraag)
-          output[vals,j] <- tekst_min_vraag_niet_gehaald
+        #Metingen die o.b.v te lage aantallen zijn vervangen 
+        if (sum(data.var$n.unweighted[data.var$col.index == j], na.rm=T) == 0) {
+          output[vals,j] = Q_MISSING
+        } else if (sum(data.var$n.unweighted[data.var$col.index == j], na.rm=T) < algemeen$min_observaties_per_vraag) {
+          #Alle percentages wegstrepen als aantallen per groep te klein zijn.
+          output[vals,j] <- Q_TOOSMALL
+        } else if(any(data.var$n.unweighted[data.var$col.index == j] < algemeen$min_observaties_per_antwoord, na.rm=T)) {
+          #Alle percentages wegstrepen als tenminste 1 van de aantallen per antwoord te klein is.
+          output[vals,j] <- A_TOOSMALL
+        }
       }
       
       # significante resultaten zichtbaar maken
@@ -312,6 +319,22 @@ min_observaties_per_vraag,min_observaties_per_antwoord, tekst_min_vraag_niet_geh
       writeData(wb, subset.name, output, startCol=1, startRow=c, colNames=F)
       addStyle(wb, subset.name, style.text, cols=2, rows=c:(c+nrow(output)), stack=T)
       addStyle(wb, subset.name, style.num, cols=3:n.col.total, rows=c:(c+nrow(output)), gridExpand=T, stack=T)
+      
+      # missende waardes goed weergeven
+      missing = which(output == Q_MISSING | output == Q_TOOSMALL | output == A_TOOSMALL, arr.ind=T)
+      if (length(missing) > 0) {
+        # vanwege gekke R logica mag de waarde geen naam hebben (unname) en moet het gedwongen een matrix zijn
+        replacement = data.frame(row=missing[,1], col=missing[,2], val=matrix(unname(output[missing])))
+        
+        for (i in 1:nrow(replacement)) {
+          val = algemeen$tekst_missende_data
+          if (as.numeric(replacement$val[i]) == Q_TOOSMALL) val = algemeen$tekst_min_antwoord_niet_gehaald
+          if (as.numeric(replacement$val[i]) == A_TOOSMALL) val = algemeen$tekst_min_vraag_niet_gehaald
+          writeData(wb, subset.name, val, startCol=replacement$col[i], startRow=c+replacement$row[i]-1, colNames=F)
+        }
+      }
+      
+      # significantie weergeven
       if (nrow(sign) > 0) {
         addStyle(wb, subset.name, style.sign, rows=c-1+sign$rij, cols=2+sign$col.index, stack=T)
       }
@@ -371,7 +394,7 @@ min_observaties_per_vraag,min_observaties_per_antwoord, tekst_min_vraag_niet_geh
     }
     
     # tekstopmaak is in te stellen in de configuratie -> [naam] en [jaar] worden vervangen
-    output[header.col.nrows, i] = str_replace(str_replace(design("header_template"), fixed("[naam]"), col.name), fixed("[jaar]"), col.design$year[i])
+    output[header.col.nrows, i] = str_replace(str_replace(design("header_template"), fixed("[naam]"), col.name), fixed("[jaar]"), ifelse(!is.na(col.design$year[i]), col.design$year[i], ""))
   }
   
   for (i in header.col.rows) {
