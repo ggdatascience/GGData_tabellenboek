@@ -80,7 +80,7 @@ source("tbl_helpers.R")
   varlist = indeling_rijen[indeling_rijen$type %in% c("var", "nvar"),]
   if (any(duplicated(varlist$inhoud))) {
     msg("Let op: variabele(n) %s komen meerdere keren voor in indeling_rijen. Controleer of dit de bedoeling is.",
-        str_c(varlist[duplicated(varlist)], collapse=", "), level=WARN)
+        str_c(varlist$inhoud[duplicated(varlist)], collapse=", "), level=WARN)
   }
   if (any(is.na(varlist$inhoud))) {
     msg("Let op: regel(s) %s bevat geen variabele. Controleer de configuratie.", level=ERR)
@@ -138,7 +138,7 @@ source("tbl_helpers.R")
         existing = data.combined[[which(colnames(data.combined) == colname)]]
         # controleren of het type en, indien relevant, factors overeenkomen
         # hierbij kan er tussen jaren best wat verschil zitten in het label, dus de labelcheck is optioneel
-        if (algemeen$vergelijk_variabelelabels) {
+        if (algemeen$vergelijk_variabelelabels) { # TODO: deze toevoegen aan configuratie.xlsx
           if (!identical(var_label(data[[c]]), var_label(existing))) {
             afwijkend = c(afwijkend, c)
           } 
@@ -157,7 +157,7 @@ source("tbl_helpers.R")
               length(val_labels(existing)), str_c(names(val_labels(existing)), collapse=", "), level=WARN)
         }
         
-        if (all(val_labels(data[[c]]) != val_labels(existing))) {
+        if (all(val_labels(data[[c]]) != val_labels(existing))) { # TODO: ik krijg hier een warning 'longer object length is not a multiple of shorter object length'
           afwijkend = c(afwijkend, c)
         }
       }
@@ -165,8 +165,10 @@ source("tbl_helpers.R")
     afwijkend = unique(afwijkend)
     
     # herschrijven kolomnamen zodat ze niet gaan storen
-    msg("Afwijkende kolommen in dataset %d: %s", d, str_c(colnames(data)[afwijkend], collapse=","), level=WARN)
-    if (length(afwijkend) > 0) colnames(data)[afwijkend] = paste0("_", d, "_", colnames(data)[afwijkend])
+    if (length(afwijkend) > 0) {
+      colnames(data)[afwijkend] = paste0("_", d, "_", colnames(data)[afwijkend])
+      msg("Afwijkende kolommen in dataset %d: %s", d, str_c(colnames(data)[afwijkend], collapse=","), level=WARN)
+    } 
     
     # zijn er weegfactoren aangetroffen? zo nee, is dat de bedoeling?
     if (!("tbl_weegfactor" %in% colnames(data))) {
