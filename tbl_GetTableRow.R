@@ -53,7 +53,7 @@ MatchTables = function (weighted, unweighted, is_2d=F) {
 
 # col.design = kolom_opbouw
 # s = 43
-GetTableRow = function (var, design, col.design, subsetmatches, calculate.ci=T) {
+GetTableRow = function (var, design, col.design, subsetmatches) {
   msg("Variabele %s wordt uitgevoerd over %d kolommen.", var, nrow(col.design), level=MSG)
   
   results = data.frame()

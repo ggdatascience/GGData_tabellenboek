@@ -138,7 +138,7 @@ source("tbl_helpers.R")
         existing = data.combined[[which(colnames(data.combined) == colname)]]
         # controleren of het type en, indien relevant, factors overeenkomen
         # hierbij kan er tussen jaren best wat verschil zitten in het label, dus de labelcheck is optioneel
-        if (algemeen$vergelijk_variabelelabels) { # TODO: deze toevoegen aan configuratie.xlsx
+        if (algemeen$vergelijk_variabelelabels) {
           if (!identical(var_label(data[[c]]), var_label(existing))) {
             afwijkend = c(afwijkend, c)
           } 
@@ -166,9 +166,9 @@ source("tbl_helpers.R")
     
     # herschrijven kolomnamen zodat ze niet gaan storen
     if (length(afwijkend) > 0) {
-      colnames(data)[afwijkend] = paste0("_", d, "_", colnames(data)[afwijkend])
       msg("Afwijkende kolommen in dataset %d: %s", d, str_c(colnames(data)[afwijkend], collapse=","), level=WARN)
-    } 
+      colnames(data)[afwijkend] = paste0("_", d, "_", colnames(data)[afwijkend])
+    }
     
     # zijn er weegfactoren aangetroffen? zo nee, is dat de bedoeling?
     if (!("tbl_weegfactor" %in% colnames(data))) {
@@ -418,6 +418,9 @@ source("tbl_helpers.R")
     source("tbl_GetTableRow.R")
     results = data.frame()
     
+    ##################### BEGIN ONGEBRUIKTE CODE
+    # dit is een project wat we ergens na VO willen toevoegen
+    # voor nu wordt dit in zijn geheel overgeslagen, vandaar de if (F)
     # TODO: parallel proberen te maken
     if (F) {
       # berekeningen kunnen parallel worden uitgevoerd met multithreading
@@ -530,6 +533,7 @@ source("tbl_helpers.R")
       
       stopCluster(clus)
     }
+    ##################### EINDE ONGEBRUIKTE CODE
     
     results = data.frame()
     t.start = proc.time()["elapsed"]
