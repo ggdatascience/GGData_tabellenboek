@@ -9,13 +9,13 @@ printf = function (...) cat(paste(sprintf(...),"\n"))
 
 ## log levels
 ERR = 1
-MSG = 2
-WARN = 3
+WARN = 2
+MSG = 3
 DEBUG = 4
 
 # functie om (fout)meldingen weer te geven
 # middels het level kunnen verschillende niveau's worden aangegeven, waarbij een lager niveau
-# altijd wordt weergegeven (dus msg("test", MSG) wordt ook getoond bij log.level = 3) 
+# altijd wordt weergegeven (dus msg("test", WARN) wordt ook getoond bij log.level = 3) 
 # - msg kan een object of een sprintf-style string zijn
 # - level moet een log level zijn
 # - overige argumenten worden doorgegeven aan sprintf
@@ -33,6 +33,11 @@ msg = function (msg, ..., level = DEBUG) {
       stop(sprintf(msg, ...))
     else
       stop(msg)
+  } else if (level == WARN) {
+    if (is.character(msg))
+      warning(sprintf(msg, ...))
+    else
+      warning(msg)
   } else if (level == MSG) {
     if (is.character(msg))
       message(sprintf(msg, ...))

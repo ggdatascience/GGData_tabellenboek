@@ -34,6 +34,12 @@ library(foreach)
 setwd(dirname(this.path()))
 source("tbl_helpers.R")
 
+# niveau van weergave van meldingen
+# mogelijke waarden: ERR / WARN / MSG / DEBUG, waarbij een hoger niveau melding altijd weergegeven wordt
+# als het level op MSG staat en er zou een WARN worden weergegeven is deze dus zichtbaar (maar andersom niet)
+# in het dagelijks gebruik is MSG ruim voldoende, zet DEBUG alleen aan bij het doorgeven van foutmeldingen aan de werkgroep
+log.level = DEBUG
+
 # het gehele script wordt omgeven door curly brackets, zodat een stop() ook daadwerkelijk het script stopt
 {
   # selecteren configuratiebestand en bijbehorende werkmap
@@ -67,7 +73,8 @@ source("tbl_helpers.R")
   
   # daadwerkelijk inlezen configuratie
   # TODO: onmogelijke waardes checken
-  sheets = c("algemeen", "crossings", "datasets", "indeling_rijen", "onderdelen", "opmaak", "labelcorrectie", "logos", "intro_tekst", "headers_afkortingen")
+  sheets = c("algemeen", "crossings", "datasets", "indeling_rijen", "onderdelen", "opmaak", "labelcorrectie", "logos", "intro_tekst", "headers_afkortingen",
+             "dichotoom", "niet_dichotoom", "forceer_datatypen")
   for (sheet in sheets) {
     tmp = read.xlsx(config.file, sheet=sheet)
     if (ncol(tmp) == 1) tmp = tmp[[1]]
@@ -134,6 +141,30 @@ source("tbl_helpers.R")
         next
       }
       
+      # in sommige datasets is een eigenlijk numerieke code omgezet naar een string (bijv. voor combinatie met CBS)
+      # om dit te corrigeren naar een bruikbare combinatie met oudere datasets kan het datatype geforceerd worden
+      if (nrow(forceer_datatypen) > 0 && colname %in% forceer_datatypen$variabele) {
+        # mogelijke opties: 'numeric' of 'character'
+        desired = forceer_datatypen$type[forceer_datatypen$variabele == colname]
+        
+        if (desired == "numeric") {
+          if (!typeof(data[[c]]) %in% c("double", "integer")) {
+            # je zou denken dat hier een functie voor was, maar die is er dus niet
+            var_label = var_label(data[[c]])
+            old_labels = data.frame(val=as.numeric(unname(val_labels(data[[c]]))), label=names(val_labels(data[[c]])))
+            old_values = to_character(data[[c]])
+            new_values = sapply(old_values, function (value) { return(old_labels$val[which(old_labels$label == value)]) })
+            new_labels = old_labels$val
+            names(new_labels) = old_labels$label
+            new_labels = sort(new_labels)
+            data[[c]] = labelled(new_values, labels=new_labels, label=var_label)
+          }
+        } else if (desired == "character") {
+          if (typeof(data[[c]]) != "character")
+            data[[c]] = to_character(data[[c]])
+        }
+      }
+      
       if (colname %in% colnames(data.combined)) {
         existing = data.combined[[which(colnames(data.combined) == colname)]]
         # controleren of het type en, indien relevant, factors overeenkomen
@@ -157,7 +188,9 @@ source("tbl_helpers.R")
               length(val_labels(existing)), str_c(names(val_labels(existing)), collapse=", "), level=WARN)
         }
         
-        if (all(val_labels(data[[c]]) != val_labels(existing))) { # TODO: ik krijg hier een warning 'longer object length is not a multiple of shorter object length'
+        # let op: warnings negeren is niet heel netjes, maar direct hierboven is met een if gecontroleerd of het aantal afwijkt
+        # deze if geeft een warning als het aantal ongelijk is... beetje dubbelop dus
+        if (suppressWarnings(!all(val_labels(data[[c]]) == val_labels(existing)))) {
           afwijkend = c(afwijkend, c)
         }
       }
@@ -181,6 +214,10 @@ source("tbl_helpers.R")
             datasets$weegfactor[d], datasets$stratum[d], d, datasets$naam_dataset[d], level=ERR)
       }
     }
+    
+    # lelijke hack voor testen:
+    #if ("KwintielGestBestHHInkomen" %in% colnames(data))
+    #  data$KwintielGestBestHHInkomen = as.numeric(data$KwintielGestBestHHInkomen)
     
     data[,"tbl_dataset"] = d
     data.combined = bind_rows(data.combined, data)
@@ -256,6 +293,8 @@ source("tbl_helpers.R")
           n, level=ERR)
     }
   }
+  
+  msg("Datasets gecombineerd. Start verwerking kolomopbouw.", level=DEBUG)
   
   # door de onderdelen loopen en die verwerken
   kolom_opbouw = data.frame()
@@ -568,7 +607,7 @@ source("tbl_helpers.R")
         # "weegfactor.d[getal]" -> override voor die variabele in dataset [getal]
         # "weegfactor.d_[naam]" -> override voor die variabele in dataset [naam]
         weegfactorvars = str_match(colnames(varlist), "weegfactor(.*)")
-        weegfactorvars = weegfactorvars[!is.na(weegfactorvars)[,1],]
+        weegfactorvars = matrix(weegfactorvars[!is.na(weegfactorvars[,1]),], ncol=2) # het moet via een matrix met 2 kolommen, omdat R anders een enkele rij omzet naar een vector
         
         for (j in 1:nrow(weegfactorvars)) {
           wfname = weegfactorvars[j,1]
@@ -595,7 +634,7 @@ source("tbl_helpers.R")
       design = svydesign(ids=~1, strata=data.tmp$superstrata, weights=data.tmp$superweegfactor, data=data.tmp)
       
       t.before = proc.time()["elapsed"]
-      results = bind_rows(results, GetTableRow(var, design, kolom_opbouw, subsetmatches, F))
+      results = bind_rows(results, GetTableRow(var, design, kolom_opbouw, subsetmatches))
       t.after = proc.time()["elapsed"]
       t.vars = c(t.vars, t.after-t.before)
       
@@ -608,6 +647,7 @@ source("tbl_helpers.R")
     # resultaten opslaan voor hergebruik
     # N.B.: alles in UTF-8 om problemen met een trema o.i.d. te voorkomen
     write.csv(varlist, sprintf("resultaten_csv/vars_%s.csv", basename(config.file)), fileEncoding="UTF-8", row.names=F)
+    write.csv(var_labels, sprintf("resultaten_csv/varlabels_%s.csv", basename(config.file)), fileEncoding="UTF-8", row.names=F)
     write.csv(kolom_opbouw, sprintf("resultaten_csv/settings_%s.csv", basename(config.file)), fileEncoding="UTF-8", row.names=F)
     write.csv(results, sprintf("resultaten_csv/results_%s.csv", basename(config.file)), fileEncoding="UTF-8", row.names=F)
   }

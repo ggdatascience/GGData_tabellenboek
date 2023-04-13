@@ -67,7 +67,7 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
                             textDecoration=design("titel_decoration"), fgFill=design("titel_fill")) # titels
   style.subtitle = createStyle(fontSize=design("kop_size"), fontColour=design("kop_color"),
                                textDecoration=design("kop_decoration"), fgFill=design("kop_fill")) # koppen
-  style.text = createStyle(wrapText=T)
+  style.text = createStyle(wrapText=T, valign="center")
   style.header.col = createStyle(halign="center", valign="center", textDecoration="bold") # kolomkoppen
   style.header.col.crossing = createStyle(halign="center", valign="center") # kolomkoppen crossings
   style.perc = createStyle(halign="center", valign="center") # percentagetekens
@@ -256,7 +256,10 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
         str_split(",") %>%
         lapply(as.numeric)
       # TODO: tabbladen met dichotoom/niet_dichotoom?
-      if (isTRUE(all.equal(levels.var, c(0, 1))) || any(unlist(lapply(dichotoom.vals, function (x) { return(identical(x, levels.var)) })))) {
+      if (!indeling_rijen$inhoud[i] %in% niet_dichotoom &&
+          (indeling_rijen$inhoud[i] %in% dichotoom ||
+           isTRUE(all.equal(levels.var, c(0, 1))) ||
+           any(unlist(lapply(dichotoom.vals, function (x) { return(identical(x, levels.var)) }))))) {
         output = output %>% as.data.frame() %>% rownames_to_column("val") %>% filter(val == 1) %>%
           mutate(label=var_labels$label[var_labels$var == indeling_rijen$inhoud[i] & var_labels$val == "var"],
                  matchcode=paste0(indeling_rijen$inhoud[i], val)) %>%
@@ -413,7 +416,7 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
       # cellen samenvoegen, zodat de titel goed over de kolommen staat
       for (dataset in unique(col.design$dataset)) {
         cols = col.design$col.index[col.design$dataset == dataset]
-        if (length(cols) > 1) {
+        if (length(cols) > 1 && max(cols - lag(cols), na.rm=T) <= 1) {
           mergeCells(wb, subset.name, cols=cols+2, rows=i)
         }
       }

@@ -75,7 +75,7 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
       if (!(paste0("dummy._col", leadingcol, ".s.", unname(subsetvals[s])) %in% names(design$variables)))
         next
       
-      msg("Variabele %s wordt uitgevoerd op subset %s met niveau %d (%s)", var, leadingsubset, unname(subsetvals[s]), names(subsetvals)[s], level=DEBUG)
+      msg("Variabele %s wordt uitgevoerd op subset %s met niveau %s (%s)", var, leadingsubset, as.character(unname(subsetvals[s])), names(subsetvals)[s], level=DEBUG)
       
       for (i in 1:nrow(colgroups)) {
         if (is.na(colgroups$subset[i])) next
@@ -108,7 +108,7 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
           
           answers = rownames(weighted)
           for (answer in answers) {
-            test = svychisq(formula=as.formula(paste0("~dummy.", var, ".", answer, "+", col.design$crossing[i])), design=design.subset)
+            test = svychisq(formula=as.formula(paste0("~dummy.", var, ".", answer, "+", colgroups$crossing[i])), design=design.subset)
             pvals[answer,] = rep(test$p.value, ncol(pvals))
           }
           
