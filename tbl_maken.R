@@ -210,10 +210,21 @@ log.level = DEBUG
       if (is.na(datasets$weegfactor[d]) && is.na(datasets$stratum[d])) {
         # geen stratum en weegfactor opgegeven; alles invullen met 1
         data$tbl_weegfactor = rep(1, nrow(data))
-        data$tbl_strata = rep(1, nrow(data))
+      } else if (is.na(datasets$weegfactor[d]) && !is.na(is.na(datasets$stratum[d]))) {
+        msg("Let op! In dataset %s is wel een stratum aangegeven, maar geen weegfactor. Dit is alleen mogelijk wanneer er per variabele een weegfactor wordt aangegeven in indeling_rijen. Controleer of dit de bedoeling is.",
+            datasets$naam_dataset[d], level=WARN)
       } else {
         msg("Kolom %s of %s is niet aangetroffen in dataset %d (%s). Laat voor een ongewogen design beide velden leeg of pas de dataset aan.",
             datasets$weegfactor[d], datasets$stratum[d], d, datasets$naam_dataset[d], level=ERR)
+      }
+    }
+    
+    if (!("tbl_strata" %in% colnames(data))) {
+      if (is.na(datasets$stratum[d])) {
+        data$tbl_strata = rep(1, nrow(data))
+      } else {
+        msg("In dataset %s is de kolom %s voor strata niet aangetroffen. Hierdoor kan er geen gewogen design worden gebruikt",
+            datasets$naam_dataset[d], datasets$stratum[d], level=ERR)
       }
     }
     
