@@ -161,7 +161,9 @@ log.level = DEBUG
           }
         } else if (desired == "character") {
           if (typeof(data[[c]]) != "character")
+            var_label = var_label(data[[c]])
             data[[c]] = to_character(data[[c]])
+            var_label(data[[c]]) = var_label
         }
       }
       
