@@ -296,6 +296,15 @@ log.level = DEBUG
     }
   }
   
+  # zijn alle benodigde variabelen aanwezig?
+  required.vars = c(weight.factors, crossings, unique(onderdelen$subset))
+  required.vars = required.vars[!is.na(required.vars)]
+  if (!all(required.vars %in% colnames(data))) {
+    msg("De variabele(n) %s komen niet voor in de dataset. Deze zijn in de configuratie opgegeven als weegfactor, crossing of subset, en daarmee verplicht. Pas de configuratie aan of voeg de variabele(n) toe aan de dataset.",
+        str_c(required.vars[!required.vars %in% colnames(data)], collapse=", "), level=ERR)
+  }
+  
+  
   msg("Datasets gecombineerd. Start verwerking kolomopbouw.", level=DEBUG)
   
   # door de onderdelen loopen en die verwerken

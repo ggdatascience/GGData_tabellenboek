@@ -204,7 +204,7 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
       
       answers = rownames(weighted)
       for (answer in answers) {
-        test = svychisq(formula=as.formula(paste0("~dummy.", var, ".", answer, "+", col.design$crossing[i])), design=design.subset)
+        test = svychisq(formula=as.formula(paste0("~dummy.", var, ".", answer, "+", colgroups$crossing[i])), design=design.subset)
         pvals[answer,] = rep(test$p.value, ncol(pvals))
       }
       
