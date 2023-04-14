@@ -125,19 +125,19 @@ log.level = DEBUG
       
       # strata willen we apart opslaan
       if (!is.na(datasets$stratum[d]) && colname == datasets$stratum[d]) {
-        colnames(data)[c] = "tbl_strata"
+        data$tbl_strata = data[[c]]
         next
       }
       
       # gewichten apart opslaan
       if (!is.na(datasets$weegfactor[d]) && colname == datasets$weegfactor[d]) {
-        colnames(data)[c] = "tbl_weegfactor"
+        data$tbl_weegfactor = data[[c]]
         next
       }
       
       # jaren apart opslaan
       if (!is.na(datasets$jaarvariabele[d]) && colname == datasets$jaarvariabele[d]) {
-        colnames(data)[c] = "tbl_jaar"
+        data$tbl_jaar = data[[c]]
         next
       }
       
@@ -227,10 +227,6 @@ log.level = DEBUG
             datasets$naam_dataset[d], datasets$stratum[d], level=ERR)
       }
     }
-    
-    # lelijke hack voor testen:
-    #if ("KwintielGestBestHHInkomen" %in% colnames(data))
-    #  data$KwintielGestBestHHInkomen = as.numeric(data$KwintielGestBestHHInkomen)
     
     data[,"tbl_dataset"] = d
     data.combined = bind_rows(data.combined, data)
