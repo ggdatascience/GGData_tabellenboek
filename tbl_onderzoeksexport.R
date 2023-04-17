@@ -81,6 +81,6 @@ source("tbl_helpers.R")
     write.xlsx(output, paste0("output/", filename))
   }
   
-  msg("Er zijn %d Excelbestanden geplaatst in de map output, allemaal met de prefix onderzoek_.", nrows(subsets), level=MSG)
+  msg("Er zijn %d Excelbestanden geplaatst in de map output, allemaal met de prefix onderzoek_.", nrow(subsets), level=MSG)
 }
 
