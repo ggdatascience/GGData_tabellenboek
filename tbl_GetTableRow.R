@@ -132,8 +132,8 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
           col = col.design$col.index[group_rows(col.design)[[i]]]
           
           weighted = svytable(formula=as.formula(paste0("~", var, "+dummy._col", col, ".s.", subsetval)), design=design)
-          if (ncol(weighted) == 2 && colnames(weighted)[2] == "TRUE") {
-            weighted = weighted[,2]
+          if ("TRUE" %in% colnames(weighted)) {
+            weighted = weighted[,"TRUE"]
           } else {
             names = rownames(weighted)
             weighted = rep(NA, nrow(weighted))
@@ -230,8 +230,8 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
       col = col.design$col.index[group_rows(col.design)[[i]]]
       
       weighted = svytable(formula=as.formula(paste0("~", var, "+dummy._col", col)), design=design)
-      if (ncol(weighted) == 2 && colnames(weighted)[2] == "TRUE") {
-        weighted = weighted[,2]
+      if ("TRUE" %in% colnames(weighted)) {
+        weighted = weighted[,"TRUE"]
       } else {
         names = rownames(weighted)
         weighted = rep(NA, nrow(weighted))
