@@ -92,7 +92,7 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
         }
         
         # crossing?
-        if (!is.na(colgroups$crossing[i]) && !is.na(colgroups$test.col[i]) && colgroups$test.col[i] == 0) {
+        if (!is.na(colgroups$crossing[i])) {
           # dit betekent meerdere kolommen vullen, want crossing
           cols = col.design$col.index[group_rows(col.design)[[i]]]
           selection = str_c(paste0("dummy._col", cols, ".s.", subsetval), collapse=" | ")
@@ -106,11 +106,14 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
           pvals = matrix(NA, nrow=nrow(weighted), ncol=ncol(weighted))
           rownames(pvals) = rownames(weighted)
           
-          answers = rownames(weighted)
-          for (answer in answers) {
-            test = svychisq(formula=as.formula(paste0("~dummy.", var, ".", answer, "+", colgroups$crossing[i])), design=design.subset)
-            pvals[answer,] = rep(test$p.value, ncol(pvals))
+          if (!is.na(colgroups$test.col[i]) && colgroups$test.col[i] == 0) {
+            answers = rownames(weighted)
+            for (answer in answers) {
+              test = svychisq(formula=as.formula(paste0("~dummy.", var, ".", answer, "+", colgroups$crossing[i])), design=design.subset)
+              pvals[answer,] = rep(test$p.value, ncol(pvals))
+            }
           }
+          
           
           # om de resultaten in een dataframe te krijgen moeten ze door as.numeric() en unname()
           # dit zorgt ervoor dat de structuur verloren gaat; de kolommen worden onder elkaar geplaatst
@@ -186,9 +189,8 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
     msg("Subset %d: dataset %d, subset %s, jaar %s, crossing %s", level=DEBUG,
         i, colgroups$dataset[i], colgroups$subset[i], colgroups$year[i], colgroups$crossing[i])
     
-    # crossing? zo ja, dan kunnen we dit behandelen als totaal indien er NIET intern vergeleken wordt (binnen de else)
-    # anders wel behandelen als crossing (dus binnen de if)
-    if (!is.na(colgroups$crossing[i]) && !is.na(colgroups$test.col[i]) && colgroups$test.col[i] == 0) {
+    # crossing?
+    if (!is.na(colgroups$crossing[i])) {
       # dit betekent meerdere kolommen vullen, want crossing
       cols = col.design$col.index[group_rows(col.design)[[i]]]
       selection = str_c(paste0("dummy._col", cols), collapse=" | ")
@@ -202,10 +204,12 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
       pvals = matrix(NA, nrow=nrow(weighted), ncol=ncol(weighted))
       rownames(pvals) = rownames(weighted)
       
-      answers = rownames(weighted)
-      for (answer in answers) {
-        test = svychisq(formula=as.formula(paste0("~dummy.", var, ".", answer, "+", colgroups$crossing[i])), design=design.subset)
-        pvals[answer,] = rep(test$p.value, ncol(pvals))
+      if (!is.na(colgroups$test.col[i]) && colgroups$test.col[i] == 0) {
+        answers = rownames(weighted)
+        for (answer in answers) {
+          test = svychisq(formula=as.formula(paste0("~dummy.", var, ".", answer, "+", colgroups$crossing[i])), design=design.subset)
+          pvals[answer,] = rep(test$p.value, ncol(pvals))
+        }
       }
       
       # om de resultaten in een dataframe te krijgen moeten ze door as.numeric() en unname()

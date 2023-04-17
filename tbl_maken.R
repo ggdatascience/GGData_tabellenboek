@@ -123,24 +123,6 @@ log.level = DEBUG
     for (c in 1:ncol(data)) {
       colname = colnames(data)[c]
       
-      # strata willen we apart opslaan
-      if (!is.na(datasets$stratum[d]) && colname == datasets$stratum[d]) {
-        data$tbl_strata = data[[c]]
-        next
-      }
-      
-      # gewichten apart opslaan
-      if (!is.na(datasets$weegfactor[d]) && colname == datasets$weegfactor[d]) {
-        data$tbl_weegfactor = data[[c]]
-        next
-      }
-      
-      # jaren apart opslaan
-      if (!is.na(datasets$jaarvariabele[d]) && colname == datasets$jaarvariabele[d]) {
-        data$tbl_jaar = data[[c]]
-        next
-      }
-      
       # in sommige datasets is een eigenlijk numerieke code omgezet naar een string (bijv. voor combinatie met CBS)
       # om dit te corrigeren naar een bruikbare combinatie met oudere datasets kan het datatype geforceerd worden
       if (nrow(forceer_datatypen) > 0 && colname %in% forceer_datatypen$variabele) {
@@ -162,9 +144,27 @@ log.level = DEBUG
         } else if (desired == "character") {
           if (typeof(data[[c]]) != "character")
             var_label = var_label(data[[c]])
-            data[[c]] = to_character(data[[c]])
-            var_label(data[[c]]) = var_label
+          data[[c]] = to_character(data[[c]])
+          var_label(data[[c]]) = var_label
         }
+      }
+      
+      # strata willen we apart opslaan
+      if (!is.na(datasets$stratum[d]) && colname == datasets$stratum[d]) {
+        data$tbl_strata = data[[c]]
+        next
+      }
+      
+      # gewichten apart opslaan
+      if (!is.na(datasets$weegfactor[d]) && colname == datasets$weegfactor[d]) {
+        data$tbl_weegfactor = data[[c]]
+        next
+      }
+      
+      # jaren apart opslaan
+      if (!is.na(datasets$jaarvariabele[d]) && colname == datasets$jaarvariabele[d]) {
+        data$tbl_jaar = data[[c]]
+        next
       }
       
       if (colname %in% colnames(data.combined)) {
