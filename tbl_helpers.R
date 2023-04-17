@@ -35,9 +35,9 @@ msg = function (msg, ..., level = DEBUG) {
       stop(msg)
   } else if (level == WARN) {
     if (is.character(msg))
-      warning(sprintf(msg, ...))
+      message(sprintf(msg, ...))
     else
-      warning(msg)
+      message(msg)
   } else if (level == MSG) {
     if (is.character(msg))
       message(sprintf(msg, ...))

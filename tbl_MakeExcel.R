@@ -476,6 +476,15 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
 
   
   # en als laatste... opslaan!
-  saveWorkbook(wb, sprintf("output/%s.xlsx", subset.name), overwrite=T)
-  msg("Tabellenboek voor %s opgeslagen.", subset.name, level=MSG)
+  tryCatch({
+    saveWorkbook(wb, sprintf("output/%s.xlsx", subset.name), overwrite=T)
+    msg("Tabellenboek voor %s opgeslagen.", subset.name, level=MSG)
+  },
+  error = function(e){
+    msg("Er is een fout opgetreden bij het maken van het Excelbestand: %s", e, level=MSG)
+  },
+  warning = function(cond){
+    msg("Er is een fout opgetreden bij het maken van het Excelbestand: %s", e, level=MSG)
+  })
+  
 }

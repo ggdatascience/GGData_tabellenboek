@@ -211,6 +211,7 @@ log.level = DEBUG
         # geen stratum en weegfactor opgegeven; alles invullen met 1
         data$tbl_weegfactor = rep(1, nrow(data))
       } else if (is.na(datasets$weegfactor[d]) && !is.na(is.na(datasets$stratum[d]))) {
+        data$tbl_weegfactor = rep(1, nrow(data))
         msg("Let op! In dataset %s is wel een stratum aangegeven, maar geen weegfactor. Dit is alleen mogelijk wanneer er per variabele een weegfactor wordt aangegeven in indeling_rijen. Controleer of dit de bedoeling is.",
             datasets$naam_dataset[d], level=WARN)
       } else {
