@@ -163,7 +163,7 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
             
             answers = names(weighted)
             for (answer in answers) {
-              test = svychisq(formula=as.formula(paste0("~dummy.", var, ".", answer, "+dummy._col", col)),
+              test = svychisq(formula=as.formula(paste0("~dummy.", var, ".", answer, "+dummy._col", col, ".s.", subsetval)),
                               design=design.subset)
               pvals[answer] = test$p.value
             }
