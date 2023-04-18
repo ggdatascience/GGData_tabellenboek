@@ -247,6 +247,11 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
       # significantie berekenen?
       if (!is.na(colgroups$test.col[i]) && sum(unweighted, na.rm=T) > 0) {
         # tweede kolom includeren
+        # let op: testen vanuit een kolom zonder subset naar een kolom MET subset gaat niet
+        if (!is.na(col.design$test.col[colgroups$test.col[i]])) {
+          msg("Let op! In kolom %d (zonder subset) wordt vergeleken met kolom %d (met subset). Dit is niet mogelijk met de opbouw van de code. Als deze verschillen inzichtelijk gemaakt moeten worden moet de berekening andersom worden gezet: kolom MET subset vs. kolom ZONDER subset.",
+              col, colgroups$test.col[i], level=WARN)
+        }
         selection = str_c(paste0("dummy._col", c(col, colgroups$test.col[i])), collapse=" | ")
         design.subset = subset(design, eval(parse(text=selection)))
         

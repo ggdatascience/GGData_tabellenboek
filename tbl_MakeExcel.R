@@ -164,15 +164,15 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
                               NA.identical(results$subset.val, subset.col) & 
                               NA.identical(results$year, col.design$year[j]) & NA.identical(results$crossing, col.design$crossing[j]) &
                               NA.identical(results$crossing.val, col.design$crossing.val[j])),] %>%
-            as.data.frame() %>% distinct() %>% group_by(var) %>% summarize(n=sum(n.unweighted, na.rm=T))
+            as.data.frame() %>% group_by(var) %>% summarize(n=sum(n.unweighted, na.rm=T))
           output[j] = max(n$n, na.rm=T)
         } else {
           # het maximale aantal per vraag is het aantal deelnemers
           # niet iedere vraag is volledig beantwoord, dus we nemen het hoogste getal
-          n = results[which(NA.identical(results$dataset, col.design$dataset[j]) & 
+          n = results[which(NA.identical(results$dataset, col.design$dataset[j]) & is.na(results$subset) & is.na(results$subset.val) &
                               NA.identical(results$year, col.design$year[j]) & NA.identical(results$crossing, col.design$crossing[j]) &
                               NA.identical(results$crossing.val, col.design$crossing.val[j])),] %>%
-            as.data.frame() %>% distinct() %>% group_by(var) %>% summarize(n=sum(n.unweighted, na.rm=T))
+            as.data.frame() %>% group_by(var) %>% summarize(n=sum(n.unweighted, na.rm=T))
           output[j] = max(n$n, na.rm=T)
         }
       }    
@@ -202,19 +202,21 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
             subset.col = subsetmatches[subsetmatches[,1] == subset.val, col.design$subset[j]]
           }
           data.tmp = results[which(NA.identical(results$dataset, col.design$dataset[j]) & NA.identical(results$subset, col.design$subset[j]) &
+                                     NA.identical(results$subset.val, subset.col) &
                                      NA.identical(results$year, col.design$year[j]) & NA.identical(results$crossing, col.design$crossing[j]) &
-                                     NA.identical(results$crossing.val, col.design$crossing.val[j]) & results$var == indeling_rijen$inhoud[i] &
-                                     NA.identical(results$subset.val, subset.col)), c("val", "crossing", "crossing.val", "sign", "sign.vs", "n.unweighted", "perc.weighted")] %>%
-            distinct() # aangezien een tweede subset vaker kan draaien moeten we hier een distinct op doen
+                                     NA.identical(results$crossing.val, col.design$crossing.val[j]) & results$var == indeling_rijen$inhoud[i]),
+                             c("val", "crossing", "crossing.val", "sign", "sign.vs", "n.unweighted", "perc.weighted")]
+          if (nrow(data.tmp) == 0) next
           data.tmp$col.index = j
           data.var = bind_rows(data.var, data.tmp)
         }
         else {
           data.tmp = results[which(NA.identical(results$dataset, col.design$dataset[j]) & NA.identical(results$subset, col.design$subset[j]) &
+                                     is.na(results$subset.val) &
                                      NA.identical(results$year, col.design$year[j]) & NA.identical(results$crossing, col.design$crossing[j]) &
                                      NA.identical(results$crossing.val, col.design$crossing.val[j]) &
-                                     results$var == indeling_rijen$inhoud[i]), c("val", "crossing", "crossing.val", "sign", "sign.vs", "n.unweighted", "perc.weighted")] %>%
-            distinct() # aangezien een tweede subset vaker kan draaien moeten we hier een distinct op doen
+                                     results$var == indeling_rijen$inhoud[i]), c("val", "crossing", "crossing.val", "sign", "sign.vs", "n.unweighted", "perc.weighted")]
+          if (nrow(data.tmp) == 0) next
           data.tmp$col.index = j
           data.var = bind_rows(data.var, data.tmp)
         }
@@ -255,7 +257,7 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
         unlist() %>%
         str_split(",") %>%
         lapply(as.numeric)
-      # TODO: tabbladen met dichotoom/niet_dichotoom?
+      
       if (!indeling_rijen$inhoud[i] %in% niet_dichotoom &&
           (indeling_rijen$inhoud[i] %in% dichotoom ||
            isTRUE(all.equal(levels.var, c(0, 1))) ||

@@ -56,7 +56,8 @@ source("tbl_helpers.R")
     left_join(var_labels %>% filter(val != "var") %>% rename(val.lab=label), by=c("var", "val")) %>% # variabele - waarde
     unite(val, val, val.lab, sep=" - ") %>%
     left_join(var_labels %>% filter(val != "var") %>% rename(subset.val.lab=label), by=c("subset"="var", "subset.val"="val")) %>% # subset - waarde
-    unite(subset.val, subset.val, subset.val.lab, sep=" - ")
+    unite(subset.val, subset.val, subset.val.lab, sep=" - ") %>%
+    distinct()
   
   results$sign.vs[which(is.numeric(results$sign.vs) & results$sign.vs > 0)] = sprintf("Totaal %s (subset %s, jaar %d)",
                                                                                datasets$naam_dataset[kolom_opbouw$dataset[results$sign.vs[is.numeric(results$sign.vs) & results$sign.vs > 0]]],
