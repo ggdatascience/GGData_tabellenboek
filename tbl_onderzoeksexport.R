@@ -59,10 +59,11 @@ source("tbl_helpers.R")
     unite(subset.val, subset.val, subset.val.lab, sep=" - ") %>%
     distinct()
   
+  # labels voor totaalkolommen
   results$sign.vs[which(is.numeric(results$sign.vs) & results$sign.vs > 0)] = sprintf("Totaal %s (subset %s, jaar %d)",
-                                                                               datasets$naam_dataset[kolom_opbouw$dataset[results$sign.vs[is.numeric(results$sign.vs) & results$sign.vs > 0]]],
-                                                                               kolom_opbouw$subset[results$sign.vs[is.numeric(results$sign.vs) & results$sign.vs > 0]],
-                                                                               kolom_opbouw$year[results$sign.vs[is.numeric(results$sign.vs) & results$sign.vs > 0]])
+                                                                               datasets$naam_dataset[kolom_opbouw$dataset[results$sign.vs[which(is.numeric(results$sign.vs) & results$sign.vs > 0)]]],
+                                                                               kolom_opbouw$subset[results$sign.vs[which(is.numeric(results$sign.vs) & results$sign.vs > 0)]],
+                                                                               kolom_opbouw$year[results$sign.vs[which(is.numeric(results$sign.vs) & results$sign.vs > 0)]])
   results$sign.vs[which(results$sign.vs == "0")] = "binnen crossing"
   
   # we gaan door de resultaten loopen per subset, en dan per subsetwaarde
@@ -76,6 +77,7 @@ source("tbl_helpers.R")
     } else {
       filename = "onderzoek_totalen.xlsx"
     }
+    filename = str_replace(filename, "/|\\\\", "_")
     
     output = results[group_rows(results)[[i]],] %>% ungroup() %>% select(-subset, -subset.val)
     
