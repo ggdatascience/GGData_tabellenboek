@@ -133,13 +133,18 @@ log.level = DEBUG
           if (!typeof(data[[c]]) %in% c("double", "integer")) {
             # je zou denken dat hier een functie voor was, maar die is er dus niet
             var_label = var_label(data[[c]])
-            old_labels = data.frame(val=as.numeric(unname(val_labels(data[[c]]))), label=names(val_labels(data[[c]])))
-            old_values = to_character(data[[c]])
-            new_values = sapply(old_values, function (value) { return(old_labels$val[which(old_labels$label == value)]) })
-            new_labels = old_labels$val
-            names(new_labels) = old_labels$label
-            new_labels = sort(new_labels)
-            data[[c]] = labelled(new_values, labels=new_labels, label=var_label)
+            if (!is.null(val_labels(data[[c]]))) {
+              old_labels = data.frame(val=as.numeric(unname(val_labels(data[[c]]))), label=names(val_labels(data[[c]])))
+              old_values = to_character(data[[c]])
+              new_values = sapply(old_values, function (value) { return(old_labels$val[which(old_labels$label == value)]) })
+              new_labels = old_labels$val
+              names(new_labels) = old_labels$label
+              new_labels = sort(new_labels)
+              data[[c]] = labelled(new_values, labels=new_labels, label=var_label)
+            } else {
+              new_values = as.numeric(data[[c]])
+              data[[c]] = labelled(new_values, label=var_label)
+            }
           }
         } else if (desired == "character") {
           if (typeof(data[[c]]) != "character")
