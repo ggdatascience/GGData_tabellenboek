@@ -471,7 +471,7 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
         kolom = n.col.total - abs(kolom) + 1
       }
       
-      insertImage(wb, naam_sheet, file=logos$bestand[i], width=logos$breedte[i], height=logos$hoogte[i], units="px",
+      insertImage(wb, subset.name, file=logos$bestand[i], width=logos$breedte[i], height=logos$hoogte[i], units="px",
                   startRow=rij, startCol=kolom)
     }
   }
