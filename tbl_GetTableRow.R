@@ -17,12 +17,13 @@
 # 3 - 16          4 - 8
 # hieruit willen we een tabel met 4 rijen waar de resultaten op de goeie locatie staan
 # dit is vooral relevant omdat survey wel alle mogelijkheden weergeeft, maar table() alleen als deze ook in de dataset zitten
+# we nemen daarom de uitslag van survey als basis, en vullen de ongewogen dan getallen met wat we wel weten
 MatchTables = function (weighted, unweighted, is_2d=F) {
   weighted.corr = weighted
   unweighted.corr = unweighted
   
   if (is_2d) {
-    if (!identical(rownames(weighted), rownames(unweighted)) || nrow(weighted) != nrow(unweighted)) {
+    if (!identical(rownames(weighted), rownames(unweighted)) || nrow(weighted) != nrow(unweighted) || !identical(colnames(weighted), colnames(unweighted)) || ncol(weighted) != ncol(unweighted)) {
       rownames = unique(c(rownames(weighted), rownames(unweighted)))
       colnames = unique(c(colnames(weighted), colnames(unweighted)))
       weighted.corr = matrix(NA, nrow=length(rownames), ncol=length(colnames))
@@ -30,10 +31,17 @@ MatchTables = function (weighted, unweighted, is_2d=F) {
       colnames(weighted.corr) = colnames
       weighted.corr[rownames(weighted),colnames(weighted)] = weighted
       
-      unweighted.corr = matrix(NA, nrow=length(rownames), ncol=length(colnames))
+      unweighted.corr = matrix(0, nrow=length(rownames), ncol=length(colnames))
       rownames(unweighted.corr) = rownames
       colnames(unweighted.corr) = colnames
-      unweighted.corr[rownames(unweighted),colnames(unweighted)] = unweighted
+      # dit is een crossing, dus als er iets mist dan is het een rij, niet een kolom (rijen zijn antwoorden, kolommen zijn crossings)
+      # als er maar één rij is moeten we dus degene vullen die in weighted ook gevuld is
+      if (length(dim(unweighted)) > 1) {
+        unweighted.corr[rownames(unweighted),colnames(unweighted)] = unweighted
+      }
+      else {
+        unweighted.corr[rowSums(weighted.corr) > 0,names(unweighted)] = unweighted
+      }
     }
   } else {
     if (!identical(names(weighted), names(unweighted)) || length(weighted) != length(unweighted)) {
@@ -42,7 +50,7 @@ MatchTables = function (weighted, unweighted, is_2d=F) {
       rownames(weighted.corr) = names
       weighted.corr[names(weighted),1] = weighted
       
-      unweighted.corr = matrix(NA, nrow=length(names), ncol=1)
+      unweighted.corr = matrix(0, nrow=length(names), ncol=1)
       rownames(unweighted.corr) = names
       unweighted.corr[names(unweighted),1] = unweighted
     }
