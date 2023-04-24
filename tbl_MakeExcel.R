@@ -435,7 +435,7 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
     data.rows.interval = c()
     for (i in 1:length(data.rows.blocks)) {
       end = ifelse(i < length(data.rows.blocks), data.rows[data.rows.blocks[i + 1]-1], data.rows[length(data.rows)])
-      
+      if (data.rows[data.rows.blocks[i]] + 1 >= end) break
       data.rows.interval = c(data.rows.interval, seq(from=data.rows[data.rows.blocks[i]]+1, to=end, by=2))
     }
     
