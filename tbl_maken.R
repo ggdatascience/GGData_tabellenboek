@@ -106,6 +106,11 @@ log.level = DEBUG
         str_c(crossings[crossings %in% onderdelen$subset], ", "), level=WARN)
   }
   
+  if (any(crossings %in% varlist$inhoud)) {
+    msg("De variabele(n) %s is/zijn ingevuld als crossing en variabele in indeling_rijen. Een variabele kan niet met zichzelf gekruist worden.",
+        str_c(crossings[crossings %in% varlist$inhoud], ", "), level=WARN)
+  }
+  
   # datasets combineren en de strata en weegfactoren apart opslaan
   data.combined = data.frame()
   for (d in 1:nrow(datasets)) {
