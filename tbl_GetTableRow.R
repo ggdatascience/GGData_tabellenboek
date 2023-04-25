@@ -26,7 +26,7 @@ MatchTables = function (weighted, unweighted, is_2d=F) {
     if (!identical(rownames(weighted), rownames(unweighted)) || nrow(weighted) != nrow(unweighted) || !identical(colnames(weighted), colnames(unweighted)) || ncol(weighted) != ncol(unweighted)) {
       rownames = unique(c(rownames(weighted), rownames(unweighted)))
       colnames = unique(c(colnames(weighted), colnames(unweighted)))
-      weighted.corr = matrix(NA, nrow=length(rownames), ncol=length(colnames))
+      weighted.corr = matrix(0, nrow=length(rownames), ncol=length(colnames))
       rownames(weighted.corr) = rownames
       colnames(weighted.corr) = colnames
       weighted.corr[rownames(weighted),colnames(weighted)] = weighted
@@ -34,19 +34,19 @@ MatchTables = function (weighted, unweighted, is_2d=F) {
       unweighted.corr = matrix(0, nrow=length(rownames), ncol=length(colnames))
       rownames(unweighted.corr) = rownames
       colnames(unweighted.corr) = colnames
-      # dit is een crossing, dus als er iets mist dan is het een rij, niet een kolom (rijen zijn antwoorden, kolommen zijn crossings)
-      # als er maar één rij is moeten we dus degene vullen die in weighted ook gevuld is
-      if (length(dim(unweighted)) > 1) {
+      # nu even creatief zijn:
+      # - bij een missende kolom (= crossing), kijken welke kolommen WEL getallen bevatten; die zitten waarschijnlijk ook in survey
+      # - bij een missende rij (= antwoordoptie), simpelweg vullen op naam
+      if (nrow(weighted) != nrow(unweighted)) {
         unweighted.corr[rownames(unweighted),colnames(unweighted)] = unweighted
-      }
-      else {
-        unweighted.corr[rowSums(weighted.corr) > 0,names(unweighted)] = unweighted
+      } else if (ncol(weighted) != ncol(unweighted)) {
+        unweighted.corr[rownames(unweighted),colSums(unweighted, na.rm=T) > 0] = unweighted[,colSums(unweighted, na.rm=T) > 0]
       }
     }
   } else {
     if (!identical(names(weighted), names(unweighted)) || length(weighted) != length(unweighted)) {
       names = unique(c(names(weighted), names(unweighted)))
-      weighted.corr = matrix(NA, nrow=length(names), ncol=1)
+      weighted.corr = matrix(0, nrow=length(names), ncol=1)
       rownames(weighted.corr) = names
       weighted.corr[names(weighted),1] = weighted
       
@@ -106,9 +106,11 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
           selection = str_c(paste0("dummy._col", cols, ".s.", subsetval), collapse=" | ")
           design.subset = subset(design, eval(parse(text=selection)))
           
-          weighted = svytable(formula=as.formula(paste0("~", var, "+", colgroups$crossing[i])),
+          weighted.raw = svytable(formula=as.formula(paste0("~", var, "+", colgroups$crossing[i])),
                               design=design.subset)
-          unweighted = MatchTables(weighted, table(design.subset$variables[[var]], design.subset$variables[[colgroups$crossing[i]]]), T)[[2]]
+          unweighted.raw = table(design.subset$variables[[var]], design.subset$variables[[colgroups$crossing[i]]])
+          weighted = MatchTables(weighted.raw, unweighted.raw, T)[[1]]
+          unweighted = MatchTables(weighted.raw, unweighted.raw, T)[[2]]
           n = length(weighted)
           
           pvals = matrix(NA, nrow=nrow(weighted), ncol=ncol(weighted))
@@ -204,9 +206,11 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
       selection = str_c(paste0("dummy._col", cols), collapse=" | ")
       design.subset = subset(design, eval(parse(text=selection)))
       
-      weighted = svytable(formula=as.formula(paste0("~", var, "+", colgroups$crossing[i])),
+      weighted.raw = svytable(formula=as.formula(paste0("~", var, "+", colgroups$crossing[i])),
                           design=design.subset)
-      unweighted = MatchTables(weighted, table(design.subset$variables[[var]], design.subset$variables[[colgroups$crossing[i]]]), T)[[2]]
+      unweighted.raw = table(design.subset$variables[[var]], design.subset$variables[[colgroups$crossing[i]]])
+      weighted = MatchTables(weighted.raw, unweighted.raw, T)[[1]]
+      unweighted = MatchTables(weighted.raw, unweighted.raw, T)[[2]]
       n = length(weighted)
       
       pvals = matrix(NA, nrow=nrow(weighted), ncol=ncol(weighted))
