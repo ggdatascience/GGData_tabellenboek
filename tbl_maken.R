@@ -52,6 +52,7 @@ log.level = DEBUG
   if (!str_ends(config.file, ".xlsx")) msg("Configuratiebestand dient een Excel-bestand te zijn.", ERR)
   setwd(dirname(config.file))
   
+  
   # algemene instellingen voor de libraries
   options(survey.lonely.psu="certainty")
   options("openxlsx.paperSize"=9) # A4
