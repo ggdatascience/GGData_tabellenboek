@@ -40,7 +40,7 @@ MatchTables = function (weighted, unweighted, is_2d=F) {
       if (nrow(weighted) != nrow(unweighted)) {
         unweighted.corr[rownames(unweighted),colnames(unweighted)] = unweighted
       } else if (ncol(weighted) != ncol(unweighted)) {
-        unweighted.corr[rownames(unweighted),colSums(unweighted, na.rm=T) > 0] = unweighted[,colSums(unweighted, na.rm=T) > 0]
+        unweighted.corr[rownames(unweighted),colnames(unweighted)[colSums(unweighted, na.rm=T) > 0]] = unweighted[,colSums(unweighted, na.rm=T) > 0]
       }
     }
   } else {
