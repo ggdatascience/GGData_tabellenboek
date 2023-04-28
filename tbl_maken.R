@@ -240,6 +240,14 @@ log.level = DEBUG
       }
     }
     
+    # jaarvariabele aanwezig?
+    if (!("tbl_jaar" %in% colnames(data))) {
+      if (!is.na(datasets$jaarvariabele[d])) {
+        msg("In dataset %s is geen jaarvariabele %s aangetroffen. Controleer de configuratie.",
+            datasets$naam_dataset[d], datasets$jaarvariabele[d], level=ERR)
+      }
+    }
+    
     data[,"tbl_dataset"] = d
     data.combined = bind_rows(data.combined, data)
     
