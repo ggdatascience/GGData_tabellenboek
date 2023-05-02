@@ -223,8 +223,10 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
       }
       
       # voor het schrijven naar Excel is een matrix met getallen makkelijker
-      output = matrix(nrow=length(unique(data.var$val)), ncol=nrow(col.design))
-      rownames(output) = sort(unique(data.var$val))
+      # het kan voorkomen dat niet alle antwoordmogelijkheden in elke subset aanwezig zijn
+      # daarom nemen we hier de bekende labels, i.p.v. de voorkomende waardes
+      output = matrix(nrow=length(var_labels$val[var_labels$var == indeling_rijen$inhoud[i] & var_labels$val != "var"]), ncol=nrow(col.design))
+      rownames(output) = sort(var_labels$val[var_labels$var == indeling_rijen$inhoud[i] & var_labels$val != "var"])
       
       # dit zou in theorie ook zonder for kunnen, maar overzichtelijkheid
       for (j in 1:nrow(col.design)) {
@@ -243,6 +245,9 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
           #Alle percentages wegstrepen als tenminste 1 van de aantallen per antwoord te klein is.
           output[vals,j] <- A_TOOSMALL
         }
+        
+        # als er nu nog missende getallen zijn betekent dat dat er geen respondenten waren met dat antwoord
+        output[is.na(output[,j]),j] = A_TOOSMALL
       }
       
       # significante resultaten zichtbaar maken
@@ -269,7 +274,7 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
           select(-val)
         
         # significantie ook aanpassen naar 1 regel
-        sign = sign %>% filter(val == 1)
+        sign = sign %>% filter(val == 1) %>% mutate(rij=1)
         
         # is de vorige regel een kop? dan headers en percentages toevoegen
         if (i > 1 && indeling_rijen$type[i-1] == "kop") {
