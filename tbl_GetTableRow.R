@@ -216,7 +216,7 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
       pvals = matrix(NA, nrow=nrow(weighted), ncol=ncol(weighted))
       rownames(pvals) = rownames(weighted)
       
-      if (!is.na(colgroups$test.col[i]) && colgroups$test.col[i] == 0) {
+      if (!is.na(colgroups$test.col[i]) && colgroups$test.col[i] == 0 & min(dim(weighted)) >= 2) {
         answers = rownames(weighted)
         for (answer in answers) {
           test = svychisq(formula=as.formula(paste0("~dummy.", var, ".", answer, "+", colgroups$crossing[i])), design=design.subset)
