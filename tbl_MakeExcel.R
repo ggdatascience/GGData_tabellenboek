@@ -231,8 +231,8 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
       # dit zou in theorie ook zonder for kunnen, maar overzichtelijkheid
       for (j in 1:nrow(col.design)) {
         # N.B.: as.character() is hier nodig omdat R niet om kan gaan met een numerieke rijnaam 0, maar wel met karakter "0"
-        vals = as.character(data.var$val[data.var$col.index == j])
-        output[vals,j] = data.var$perc.weighted[data.var$col.index == j]
+        vals = as.character(data.var$val[data.var$col.index == j & data.var$val %in% rownames(output)])
+        output[vals,j] = data.var$perc.weighted[data.var$col.index == j & data.var$val %in% rownames(output)]
         
         #PS:
         #Metingen die o.b.v te lage aantallen zijn vervangen 
