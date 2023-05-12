@@ -178,6 +178,14 @@ log.level = DEBUG
         next
       }
       
+      # checken of de gevraagde subset aanwezig is in de dataset
+      if(!is.na(onderdelen$subset[d])){
+        if(!onderdelen$subset[d] %in% colnames(data)){
+          msg("De variabele(n) %s komen niet voor in de dataset. Deze is in de configuratie opgegeven als subset, en daarmee verplicht. Pas de configuratie aan of voeg de variabele(n) toe aan de dataset.",
+              onderdelen$subset[d], level=ERR)
+        }
+      }
+      
       if (colname %in% colnames(data.combined)) {
         existing = data.combined[[which(colnames(data.combined) == colname)]]
         # controleren of het type en, indien relevant, factors overeenkomen
