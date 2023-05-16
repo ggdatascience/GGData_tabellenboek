@@ -226,7 +226,10 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
       # het kan voorkomen dat niet alle antwoordmogelijkheden in elke subset aanwezig zijn
       # daarom nemen we hier de bekende labels, i.p.v. de voorkomende waardes
       output = matrix(nrow=length(var_labels$val[var_labels$var == indeling_rijen$inhoud[i] & var_labels$val != "var"]), ncol=nrow(col.design))
-      rownames(output) = sort(var_labels$val[var_labels$var == indeling_rijen$inhoud[i] & var_labels$val != "var"])
+      # het kan in zeldzame gevallen voorkomen dat er meer dan 10 antwoorden zijn
+      # in zo'n geval zal sort() er 1 10 11 12 2 3 4 van maken, omdat het strings zijn
+      # voor de indeling zijn we echter wel afhankelijk van een character... dus dubbele omzetting!
+      rownames(output) = as.character(sort(as.numeric(var_labels$val[var_labels$var == indeling_rijen$inhoud[i] & var_labels$val != "var"])))
       
       # dit zou in theorie ook zonder for kunnen, maar overzichtelijkheid
       for (j in 1:nrow(col.design)) {
