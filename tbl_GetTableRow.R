@@ -217,7 +217,7 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
       rownames(pvals) = rownames(weighted)
       
       if (!is.na(colgroups$test.col[i]) && colgroups$test.col[i] == 0) {
-        if (min(dim(weighted)) >= 2) {
+        if (min(dim(weighted)) < 2) {
           msg("Bij variabele %s met crossing %s werd maar één rij/kolom in de kruistabel gevonden. Hierdoor kan geen chi2-test worden uitgevoerd. Controleer de data.",
               var, colgroups$crossing[i], level=WARN)
         } else {
