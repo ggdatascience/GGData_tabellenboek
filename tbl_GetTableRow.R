@@ -119,8 +119,13 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
           if (!is.na(colgroups$test.col[i]) && colgroups$test.col[i] == 0) {
             answers = rownames(weighted)
             for (answer in answers) {
-              test = svychisq(formula=as.formula(paste0("~dummy.", var, ".", answer, "+", colgroups$crossing[i])), design=design.subset)
-              pvals[answer,] = rep(test$p.value, ncol(pvals))
+              tryCatch({
+                test = svychisq(formula=as.formula(paste0("~dummy.", var, ".", answer, "+", colgroups$crossing[i])), design=design.subset)
+                pvals[answer,] = rep(test$p.value, ncol(pvals))
+              },
+              error=function (e) msg("Bij variabele %s met antwoord %s (%s) kon geen p-waarde worden berekend voor crossing %s in subset %s. Foutmelding: %s",
+                                     var, answer, var_labels$label[var_labels$var == var & var_labels$val == answer], colgroups$crossing[i], subsetval,
+                                     e, level=WARN))
             }
           }
           
@@ -218,13 +223,18 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
       
       if (!is.na(colgroups$test.col[i]) && colgroups$test.col[i] == 0) {
         if (min(dim(weighted)) < 2) {
-          msg("Bij variabele %s met crossing %s werd maar één rij/kolom in de kruistabel gevonden. Hierdoor kan geen chi2-test worden uitgevoerd. Controleer de data.",
-              var, colgroups$crossing[i], level=WARN)
+          msg("Bij variabele %s met crossing %s werd maar één rij/kolom in de kruistabel gevonden (dimensies %s). Hierdoor kan geen chi2-test worden uitgevoerd. Controleer de data.",
+              var, colgroups$crossing[i], str_c(dim(weighted), collapse="x"), level=WARN)
         } else {
           answers = rownames(weighted)
           for (answer in answers) {
-            test = svychisq(formula=as.formula(paste0("~dummy.", var, ".", answer, "+", colgroups$crossing[i])), design=design.subset)
-            pvals[answer,] = rep(test$p.value, ncol(pvals))
+            tryCatch({
+              test = svychisq(formula=as.formula(paste0("~dummy.", var, ".", answer, "+", colgroups$crossing[i])), design=design.subset)
+              pvals[answer,] = rep(test$p.value, ncol(pvals))
+            },
+            error=function (e) msg("Bij variabele %s met antwoord %s (%s) kon geen p-waarde worden berekend voor crossing %s. Foutmelding: %s",
+                                   var, answer, var_labels$label[var_labels$var == var & var_labels$val == answer], colgroups$crossing[i],
+                                   e, level=WARN))
           }
         }
       }
