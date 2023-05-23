@@ -454,8 +454,9 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
   }
   if (design("kolommen_crossings_kleuren")) {
     col.design = col.design %>% group_by(dataset, subset, year, crossing)
+    cols = group_rows(col.design)[order(sapply(group_rows(col.design),'[[',1))]
     gray = T
-    for (i in group_rows(col.design)) {
+    for (i in cols) {
       if (gray) {
         addStyle(wb, subset.name, style.gray.bg, rows=c(data.rows, perc.rows, header.col.rows + ifelse(design("header_stijl") == "enkel", 0, 1)),
                  cols=2+i, gridExpand=T, stack=T)
