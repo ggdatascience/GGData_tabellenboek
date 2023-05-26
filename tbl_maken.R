@@ -83,6 +83,16 @@ log.level = DEBUG
   }
   rm(tmp)
   
+  # controleren of nieuw toegevoegde opties ook zijn ingevuld
+  # uiteindelijk zal dit verwijderd worden, maar voor nu is een overgangsperiode wel fijn
+  if (!("vraag_verbergen_bij_missend_antwoord" %in% colnames(algemeen) && "afkapwaarde_antwoord" %in% colnames(algemeen))) {
+    msg("Let op! Er zijn twee nieuwe opties toegevoegd aan het tabblad algemeen: afkapwaarde_antwoord en vraag_verbergen_bij_missend_antwoord. (Zie de handleiding.)", level=WARN)
+    msg("Deze opties missen momenteel in de configuratie. Er wordt nu de standaardwaarde (afkapwaarde = 0, vraag verbergen = WAAR) aangenomen.", level=WARN)
+    msg("Het is van belang om deze opties alsnog toe te voegen aan de configuratie; in een volgende versie van het script zal deze waarschuwing vervangen worden door een fout.", level=WARN)
+    algemeen$vraag_verbergen_bij_missend_antwoord = F
+    algemeen$afkapwaarde_antwoord = 0.0
+  }
+  
   # variabelelijst afleiden uit de indeling van het tabellenboek;
   # iedere regel met (n)var is een variabele die we nodig hebben
   varlist = indeling_rijen[indeling_rijen$type %in% c("var", "nvar"),]

@@ -17,6 +17,32 @@ NA.identical = function (vect, cmp) {
   }
 }
 
+# standaardwaardes opmaak, mochten deze missen
+opmaak.default = read.table(text='"type" "waarde"
+"1" "titel_size" "14"
+"2" "titel_color" "#FFFFFF"
+"3" "titel_decoration" "bold"
+"4" "titel_fill" "#D1005D"
+"5" "kop_size" "14"
+"6" "kop_color" "#FFFFFF"
+"7" "kop_decoration" "bold"
+"8" "kop_fill" "#1D1756"
+"9" "rij_hoogte" "16"
+"10" "rij_hoogte_kop" "28"
+"11" "kolombreedte_antwoorden" "60"
+"12" "kolombreedte" "10"
+"13" "font_color" "#000000"
+"14" "font_type" "Calibri"
+"15" "font_size" "11"
+"16" "border_tussen_gegevens" "FALSE"
+"17" "rijen_afwisselend_kleuren" "FALSE"
+"18" "kolommen_afwisselend_kleuren" "FALSE"
+"19" "kolommen_crossings_kleuren" "TRUE"
+"20" "header_stijl" "enkel"
+"21" "header_template" "Totaal [naam] [jaar]"
+"22" "crossing_headers_kleiner" "TRUE"
+"23" "label_max_lengte" "66"')
+
 design = function (var) {
   if (str_length(var) <= 1) {
     msg("Variabelenaam kan niet leeg zijn.", level=ERR)
@@ -237,6 +263,9 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
         vals = as.character(data.var$val[data.var$col.index == j & data.var$val %in% rownames(output)])
         output[vals,j] = data.var$perc.weighted[data.var$col.index == j & data.var$val %in% rownames(output)]
         
+        # waarden onder de afkapgrens vervangen
+        output[which(output[,j] <= algemeen$afkapwaarde_antwoord),j] = A_TOOSMALL
+        
         #PS:
         #Metingen die o.b.v te lage aantallen zijn vervangen 
         if (sum(data.var$n.unweighted[data.var$col.index == j], na.rm=T) == 0) {
@@ -245,8 +274,19 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
           #Alle percentages wegstrepen als aantallen per groep te klein zijn.
           output[vals,j] <- Q_TOOSMALL
         } else if(any(data.var$n.unweighted[data.var$col.index == j] < algemeen$min_observaties_per_antwoord, na.rm=T)) {
-          #Alle percentages wegstrepen als tenminste 1 van de aantallen per antwoord te klein is.
-          output[vals,j] <- A_TOOSMALL
+          # Bij een cel met te weinig antwoorden zijn er twee opties:
+          # 1) De hele kolom verbergen, om herleidbaarheid te voorkomen.
+          # 2) Alleen die cel verbergen.
+          # De keuze hierin is discutabel, dus we laten het over aan de onderzoekers zelf.
+          if (algemeen$vraag_verbergen_bij_missend_antwoord) {
+            #Alle percentages wegstrepen als tenminste 1 van de aantallen per antwoord te klein is.
+            output[vals,j] <- A_TOOSMALL
+          }
+          else {
+            # alleen de cel wegstrepen
+            data.col = data.var[data.var$col.index == j & data.var$val %in% rownames(output),]
+            output[data.col$val[which(data.col$n.unweighted < algemeen$min_observaties_per_antwoord)],j] <- A_TOOSMALL
+          }
         }
         
         # als er nu nog missende getallen zijn betekent dat dat er geen respondenten waren met dat antwoord
