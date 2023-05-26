@@ -341,8 +341,8 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
         
         for (i in 1:nrow(replacement)) {
           val = algemeen$tekst_missende_data
-          if (as.numeric(replacement$val[i]) == Q_TOOSMALL) val = algemeen$tekst_min_antwoord_niet_gehaald
-          if (as.numeric(replacement$val[i]) == A_TOOSMALL) val = algemeen$tekst_min_vraag_niet_gehaald
+          if (as.numeric(replacement$val[i]) == Q_TOOSMALL) val = algemeen$tekst_min_vraag_niet_gehaald
+          if (as.numeric(replacement$val[i]) == A_TOOSMALL) val = algemeen$tekst_min_antwoord_niet_gehaald
           writeData(wb, subset.name, val, startCol=replacement$col[i], startRow=c+replacement$row[i]-1, colNames=F)
         }
       }
