@@ -677,7 +677,7 @@ log.level = DEBUG
             data.tmp$superweegfactor = data.tmp[[varlist$weegfactor[j]]]
           } else if (!is.na(varlist[[wfname]][i]) && str_detect(wfdataset, "^\\.d(\\d+)$")) { # numeriek, dus d[getal]
             dataset = as.numeric(str_match(wfdataset, "(\\d)+")[,2])
-            data.tmp$superweegfactor[data.tmp$tbl_dataset == dataset] = data.tmp[[varlist[[wfname]][j]]][data.tmp$tbl_dataset == dataset]
+            data.tmp$superweegfactor[data.tmp$tbl_dataset == dataset] = data.tmp[[varlist[[wfname]][i]]][data.tmp$tbl_dataset == dataset]
           } else if (!is.na(varlist[[wfname]][i]) && str_detect(wfdataset, "^\\.d_(.+)")) { # naam van een dataset
             dataset = str_match(wfdataset, "^\\.d_(.+)")[,2]
             if (!dataset %in% datasets$naam_dataset) {
