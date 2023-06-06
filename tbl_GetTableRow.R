@@ -117,15 +117,20 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
           rownames(pvals) = rownames(weighted)
           
           if (!is.na(colgroups$test.col[i]) && colgroups$test.col[i] == 0) {
-            answers = rownames(weighted)
-            for (answer in answers) {
-              tryCatch({
-                test = svychisq(formula=as.formula(paste0("~dummy.", var, ".", answer, "+", colgroups$crossing[i])), design=design.subset)
-                pvals[answer,] = rep(test$p.value, ncol(pvals))
-              },
-              error=function (e) msg("Bij variabele %s met antwoord %s (%s) kon geen p-waarde worden berekend voor crossing %s in subset %s. Foutmelding: %s",
-                                     var, answer, var_labels$label[var_labels$var == var & var_labels$val == answer], colgroups$crossing[i], subsetval,
-                                     e, level=WARN))
+            if (min(dim(weighted)) < 2) {
+              msg("Bij variabele %s met crossing %s werd maar één rij/kolom in de kruistabel gevonden (dimensies %s). Hierdoor kan geen chi2-test worden uitgevoerd. Controleer de data.",
+                  var, colgroups$crossing[i], str_c(dim(weighted), collapse="x"), level=WARN)
+            } else {
+              answers = rownames(weighted)
+              for (answer in answers) {
+                tryCatch({
+                  test = svychisq(formula=as.formula(paste0("~dummy.", var, ".", answer, "+", colgroups$crossing[i])), design=design.subset)
+                  pvals[answer,] = rep(test$p.value, ncol(pvals))
+                },
+                error=function (e) msg("Bij variabele %s met antwoord %s (%s) kon geen p-waarde worden berekend voor crossing %s in subset %s. Foutmelding: %s",
+                                       var, answer, var_labels$label[var_labels$var == var & var_labels$val == answer], colgroups$crossing[i], subsetval,
+                                       e, level=WARN))
+              }
             }
           }
           
@@ -178,9 +183,14 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
             
             answers = names(weighted)
             for (answer in answers) {
-              test = svychisq(formula=as.formula(paste0("~dummy.", var, ".", answer, "+dummy._col", col, ".s.", subsetval)),
-                              design=design.subset)
-              pvals[answer] = test$p.value
+              tryCatch({
+                test = svychisq(formula=as.formula(paste0("~dummy.", var, ".", answer, "+dummy._col", col, ".s.", subsetval)),
+                                design=design.subset)
+                pvals[answer] = test$p.value
+              },
+              error=function (e) msg("Bij variabele %s met antwoord %s (%s) kon geen p-waarde worden berekend. Foutmelding: %s",
+                                     var, answer, var_labels$label[var_labels$var == var & var_labels$val == answer],
+                                     e, level=WARN))
             }
           }
           
@@ -279,14 +289,20 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
           msg("Let op! In kolom %d (zonder subset) wordt vergeleken met kolom %d (met subset). Dit is niet mogelijk met de opbouw van de code. Als deze verschillen inzichtelijk gemaakt moeten worden moet de berekening andersom worden gezet: kolom MET subset vs. kolom ZONDER subset.",
               col, colgroups$test.col[i], level=WARN)
         }
+        
         selection = str_c(paste0("dummy._col", c(col, colgroups$test.col[i])), collapse=" | ")
         design.subset = subset(design, eval(parse(text=selection)))
         
         answers = names(weighted)
         for (answer in answers) {
-          test = svychisq(formula=as.formula(paste0("~dummy.", var, ".", answer, "+dummy._col", col)),
-                          design=design.subset)
-          pvals[answer] = test$p.value
+          tryCatch({
+            test = svychisq(formula=as.formula(paste0("~dummy.", var, ".", answer, "+dummy._col", col)),
+                            design=design.subset)
+            pvals[answer] = test$p.value
+          },
+          error=function (e) msg("Bij variabele %s met antwoord %s (%s) kon geen p-waarde worden berekend. Foutmelding: %s",
+                                 var, answer, var_labels$label[var_labels$var == var & var_labels$val == answer],
+                                 e, level=WARN))
         }
       }
       
