@@ -57,7 +57,8 @@ source("tbl_helpers.R")
     unite(val, val, val.lab, sep=" - ") %>%
     left_join(var_labels %>% filter(val != "var") %>% rename(subset.val.lab=label), by=c("subset"="var", "subset.val"="val")) %>% # subset - waarde
     unite(subset.val, subset.val, subset.val.lab, sep=" - ") %>%
-    distinct()
+    distinct() %>%
+    rename(p=sign)
   
   # labels voor totaalkolommen
   results$sign.vs[which(is.numeric(results$sign.vs) & results$sign.vs > 0)] = sprintf("Totaal %s (subset %s, jaar %d)",
@@ -81,7 +82,7 @@ source("tbl_helpers.R")
     
     output = results[group_rows(results)[[i]],] %>% ungroup() %>% select(-subset, -subset.val)
     
-    write.xlsx(output, paste0("output/", filename))
+    write.xlsx(output, paste0("output/", filename), firstActiveRow=2, withFilter=T)
   }
   
   msg("Er zijn %d Excelbestanden geplaatst in de map output, allemaal met de prefix onderzoek_.", nrow(subsets), level=MSG)

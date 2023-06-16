@@ -172,11 +172,11 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
             # tweede kolom includeren
             selection = paste0("dummy._col", col, ".s.", subsetval, " | dummy._col", colgroups$test.col[i])
             # subset nodig voor testkolom?
-            if (!is.na(colgroups$subset[colgroups$test.col[i]])) {
-              if (colgroups$subset[colgroups$test.col[i]] == leadingsubset) {
+            if (!is.na(col.design$subset[colgroups$test.col[i]])) {
+              if (col.design$subset[colgroups$test.col[i]] == leadingsubset) {
                 selection = paste0(selection, ".s.", subsetvals[s])
               } else {
-                selection = paste0(selection, ".s.", subsetmatches[subsetmatches[,1] == subsetvals[s], colgroups$subset[colgroups$test.col[i]]])
+                selection = paste0(selection, ".s.", subsetmatches[subsetmatches[,1] == subsetvals[s], col.design$subset[colgroups$test.col[i]]])
               }
             }
             design.subset = subset(design, eval(parse(text=selection)))

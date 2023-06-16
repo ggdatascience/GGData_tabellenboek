@@ -93,6 +93,12 @@ log.level = DEBUG
     algemeen$afkapwaarde_antwoord = 0.0
   }
   
+  # sanity checks op indeling_rijen
+  if (any(is.na(indeling_rijen$type)) || any(!indeling_rijen$type %in% c("aantallen", "var", "titel", "kop", "tekst"))) {
+    msg("Ongeldige waardes aangetroffen in de kolom type van tabblad indeling_rijen. Het betreft rij(en) %s. Geldige waardes zijn 'aantallen', 'var', 'titel', 'kop', of 'tekst'.",
+        str_c(which(is.na(indeling_rijen$type) | !indeling_rijen$type %in% c("aantallen", "var", "titel", "kop", "tekst")), collapse=", "), level=ERR)
+  }
+  
   # variabelelijst afleiden uit de indeling van het tabellenboek;
   # iedere regel met (n)var is een variabele die we nodig hebben
   varlist = indeling_rijen[indeling_rijen$type %in% c("var", "nvar"),]
@@ -514,7 +520,7 @@ log.level = DEBUG
   }
   
   if (calc.results) {
-    source("tbl_GetTableRow.R")
+    source(paste0(dirname(this.path()), "/tbl_GetTableRow.R"))
     results = data.frame()
     
     ##################### BEGIN ONGEBRUIKTE CODE
@@ -756,7 +762,7 @@ log.level = DEBUG
   }
   
   # uitdraaien tabellenboeken
-  source("tbl_MakeExcel.R")
+  source(paste0(dirname(this.path()), "/tbl_MakeExcel.R"))
   if (is.null(subsetmatches)) {
     # geen subsets, 1 tabellenboek
     msg("Tabellenboek wordt gemaakt: Overzicht.xlsx.", level=MSG)
