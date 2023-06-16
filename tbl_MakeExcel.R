@@ -189,7 +189,7 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
           n = results[which(NA.identical(results$dataset, col.design$dataset[j]) & NA.identical(results$subset, col.design$subset[j]) &
                               NA.identical(results$subset.val, subset.col) & 
                               NA.identical(results$year, col.design$year[j]) & NA.identical(results$crossing, col.design$crossing[j]) &
-                              NA.identical(results$crossing.val, col.design$crossing.val[j])),] %>%
+                              NA.identical(results$crossing.val, col.design$crossing.val[j]) & NA.identical(results$sign.vs, col.design$test.col[j])),] %>%
             as.data.frame() %>% group_by(var) %>% summarize(n=sum(n.unweighted, na.rm=T))
           output[j] = max(n$n, na.rm=T)
         } else {
@@ -197,7 +197,7 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
           # niet iedere vraag is volledig beantwoord, dus we nemen het hoogste getal
           n = results[which(NA.identical(results$dataset, col.design$dataset[j]) & is.na(results$subset) & is.na(results$subset.val) &
                               NA.identical(results$year, col.design$year[j]) & NA.identical(results$crossing, col.design$crossing[j]) &
-                              NA.identical(results$crossing.val, col.design$crossing.val[j])),] %>%
+                              NA.identical(results$crossing.val, col.design$crossing.val[j]) & NA.identical(results$sign.vs, col.design$test.col[j])),] %>%
             as.data.frame() %>% group_by(var) %>% summarize(n=sum(n.unweighted, na.rm=T))
           output[j] = max(n$n, na.rm=T)
         }
