@@ -230,7 +230,8 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
           data.tmp = results[which(NA.identical(results$dataset, col.design$dataset[j]) & NA.identical(results$subset, col.design$subset[j]) &
                                      NA.identical(results$subset.val, subset.col) &
                                      NA.identical(results$year, col.design$year[j]) & NA.identical(results$crossing, col.design$crossing[j]) &
-                                     NA.identical(results$crossing.val, col.design$crossing.val[j]) & results$var == indeling_rijen$inhoud[i]),
+                                     NA.identical(results$crossing.val, col.design$crossing.val[j]) & NA.identical(results$sign.vs, col.design$test.col[j]) &
+                                     results$var == indeling_rijen$inhoud[i]),
                              c("val", "crossing", "crossing.val", "sign", "sign.vs", "n.unweighted", "perc.weighted")]
           if (nrow(data.tmp) == 0) next
           data.tmp$col.index = j
@@ -240,8 +241,9 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
           data.tmp = results[which(NA.identical(results$dataset, col.design$dataset[j]) & NA.identical(results$subset, col.design$subset[j]) &
                                      is.na(results$subset.val) &
                                      NA.identical(results$year, col.design$year[j]) & NA.identical(results$crossing, col.design$crossing[j]) &
-                                     NA.identical(results$crossing.val, col.design$crossing.val[j]) &
-                                     results$var == indeling_rijen$inhoud[i]), c("val", "crossing", "crossing.val", "sign", "sign.vs", "n.unweighted", "perc.weighted")]
+                                     NA.identical(results$crossing.val, col.design$crossing.val[j]) & NA.identical(results$sign.vs, col.design$test.col[j]) &
+                                     results$var == indeling_rijen$inhoud[i]),
+                             c("val", "crossing", "crossing.val", "sign", "sign.vs", "n.unweighted", "perc.weighted")]
           if (nrow(data.tmp) == 0) next
           data.tmp$col.index = j
           data.var = bind_rows(data.var, data.tmp)
