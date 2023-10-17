@@ -50,6 +50,9 @@ design = function (var) {
   
   if (var %in% opmaak$type) {
     ret = opmaak$waarde[opmaak$type == var]
+  } else if (str_starts(var, "vraag_") && str_replace(var, "vraag_", "kop_") %in% opmaak$type) {
+    # losse opmaak voor vragen is later toegevoegd, wanneer deze ontbreekt nemen we de opmaak van een kop
+    ret = opmaak$waarde[opmaak$type == str_replace(var, "vraag_", "kop_")]
   } else if (var %in% opmaak.default$type) {
     ret = opmaak.default$waarde[opmaak.default$type == var]
   } else {
@@ -66,7 +69,7 @@ design = function (var) {
     ret = as.numeric(ret)
   }
   
-  return (ret)
+  return(ret)
 }
 
 # col.design = kolom_opbouw
@@ -93,6 +96,8 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
                             textDecoration=design("titel_decoration"), fgFill=design("titel_fill")) # titels
   style.subtitle = createStyle(fontSize=design("kop_size"), fontColour=design("kop_color"),
                                textDecoration=design("kop_decoration"), fgFill=design("kop_fill")) # koppen
+  style.question = createStyle(fontSize=design("vraag_size"), fontColour=design("vraag_color"),
+                               textDecoration=design("vraag_decoration"), fgFill=design("vraag_fill")) # vragen/variabelen/indicatoren
   style.text = createStyle(wrapText=T, valign="center")
   style.header.col = createStyle(halign="center", valign="center", textDecoration="bold") # kolomkoppen
   style.header.col.crossing = createStyle(halign="center", valign="center") # kolomkoppen crossings
@@ -153,7 +158,7 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
   n.col.total = n.col + 2 # aantal kolommen in de sheet (1: matchcode, 2: label)
   table.start = c
   for (i in 1:nrow(indeling_rijen)) {
-    if (indeling_rijen$type[i] %in% c("titel", "kop", "tekst")) { # regel met een titel, kop, of tekst
+    if (indeling_rijen$type[i] %in% c("titel", "kop", "vraag", "tekst")) { # regel met een titel, kop, of tekst
       # een extra witregel voor koppen of titels
       if (indeling_rijen$type[i] != "tekst") {
         if (i > 1)
@@ -171,6 +176,14 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
         # TODO: willen we hier weer headers toevoegen als de volgende regel een var is?
         addStyle(wb, subset.name, style.subtitle, rows=c, cols=1:n.col.total, stack=T)
         title.rows = c(title.rows, c)
+      } else if (indeling_rijen$type[i] == "vraag") {
+        addStyle(wb, subset.name, style.question, rows=c, cols=1:n.col.total, stack=T)
+        title.rows = c(title.rows, c)
+        # kolomkoppen toevoegen?
+        if (!is.na(indeling_rijen$kolomkoppen[i])) {
+          header.col.rows = c(header.col.rows, c+1)
+          c = c + header.col.nrows
+        }
       } else { # tekst
         addStyle(wb, subset.name, style.text, rows=c, cols=1:n.col.total, stack=T)
         mergeCells(wb, subset.name, cols=2:n.col.total, rows=c)  
@@ -264,6 +277,8 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
         # N.B.: as.character() is hier nodig omdat R niet om kan gaan met een numerieke rijnaam 0, maar wel met karakter "0"
         vals = as.character(data.var$val[data.var$col.index == j & data.var$val %in% rownames(output)])
         output[vals,j] = data.var$perc.weighted[data.var$col.index == j & data.var$val %in% rownames(output)]
+        if ("weergave" %in% algemeen && algemeen$weergave == "n")
+          output[vals,j] = data.var$n[data.var$col.index == j & data.var$val %in% rownames(output)]
         
         # waarden onder de afkapgrens vervangen
         output[which(output[,j] <= algemeen$afkapwaarde_antwoord),j] = A_TOOSMALL
@@ -322,7 +337,8 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
         sign = sign %>% filter(val == 1) %>% mutate(rij=1)
         
         # is de vorige regel een kop? dan headers en percentages toevoegen
-        if (i > 1 && indeling_rijen$type[i-1] == "kop") {
+        # als de vorige regel een vraag is dan heeft deze dat al
+        if (i > 1 && indeling_rijen$type[i-1] == "kop" && is.na(indeling_rijen$kolomkoppen[i])) {
           # ruimte vrijhouden voor het later invoegen van headers
           header.col.rows = c(header.col.rows, c)
           c = c + header.col.nrows
@@ -348,13 +364,15 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
         writeData(wb, subset.name, data.frame(col1=indeling_rijen$inhoud[i],
                                               col2=var_labels$label[var_labels$var == indeling_rijen$inhoud[i] & var_labels$val == "var"]),
                   startCol=1, startRow=c, colNames=F)
-        addStyle(wb, subset.name, style.subtitle, cols=2:n.col.total, rows=c, stack=T)
+        addStyle(wb, subset.name, style.question, cols=2:n.col.total, rows=c, stack=T)
         title.rows = c(title.rows, c)
         c = c + 1
         
-        # ruimte vrijhouden voor het later invoegen van headers
-        header.col.rows = c(header.col.rows, c)
-        c = c + header.col.nrows
+        # ruimte vrijhouden voor het later invoegen van headers, indien gewenst
+        if (is.na(indeling_rijen$kolomkoppen[i])) {
+          header.col.rows = c(header.col.rows, c)
+          c = c + header.col.nrows
+        }
         
         # TODO: nvar toevoegen?
         # regel met procenttekens

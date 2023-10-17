@@ -94,9 +94,16 @@ log.level = DEBUG
   }
   
   # sanity checks op indeling_rijen
-  if (any(is.na(indeling_rijen$type)) || any(!indeling_rijen$type %in% c("aantallen", "var", "titel", "kop", "tekst"))) {
-    msg("Ongeldige waardes aangetroffen in de kolom type van tabblad indeling_rijen. Het betreft rij(en) %s. Geldige waardes zijn 'aantallen', 'var', 'titel', 'kop', of 'tekst'.",
-        str_c(which(is.na(indeling_rijen$type) | !indeling_rijen$type %in% c("aantallen", "var", "titel", "kop", "tekst")), collapse=", "), level=ERR)
+  if (any(is.na(indeling_rijen$type)) || any(!indeling_rijen$type %in% c("aantallen", "var", "titel", "kop", "vraag", "tekst"))) {
+    msg("Ongeldige waardes aangetroffen in de kolom type van tabblad indeling_rijen. Het betreft rij(en) %s. Geldige waardes zijn 'aantallen', 'var', 'titel', 'kop', 'vraag', of 'tekst'.",
+        str_c(which(is.na(indeling_rijen$type) | !indeling_rijen$type %in% c("aantallen", "var", "titel", "kop", "vraag", "tekst")), collapse=", "), level=ERR)
+  }
+  
+  # latere toevoeging: mogelijkheid om kolomkoppen aan en uit te zetten per variabele/kop
+  # als deze kolom mist nemen we standaardgedrag aan, dus we kunnen de kolom veilig toevoegen met NA
+  if (!"kolomkoppen" %in% colnames(indeling_rijen)) {
+    indeling_rijen$kolomkoppen = rep(NA, nrow(indeling_rijen))
+    msg("Er is geen kolom met de naam 'kolomkoppen' aanwezig in indeling_rijen. Standaardwaarden (kolomkoppen bij iedere vraag) worden aangenomen.", level=WARN)
   }
   
   # variabelelijst afleiden uit de indeling van het tabellenboek;
@@ -504,6 +511,12 @@ log.level = DEBUG
     results = read.csv(sprintf("resultaten_csv/results_%s.csv", basename(config.file)), fileEncoding="UTF-8")
     kolom_opbouw.prev = read.csv(sprintf("resultaten_csv/settings_%s.csv", basename(config.file)), fileEncoding="UTF-8")
     varlist.prev = read.csv(sprintf("resultaten_csv/vars_%s.csv", basename(config.file)), fileEncoding="UTF-8")
+    
+    # kolomkoppen mogen verschillen tussen varlist en varlist.prev, dus we kopieren gewoon simpelweg
+    if ("kolomkoppen" %in% varlist.prev)
+      varlist$kolomkoppen = varlist.prev$kolomkoppen
+    else if ("kolomkoppen" %in% varlist && !"kolomkoppen" %in% varlist.prev)
+      varlist.prev$kolomkoppen = varlist$kolomkoppen
     
     if (identical.enough(kolom_opbouw, kolom_opbouw.prev) && identical.enough(varlist, varlist.prev)) {
       msg("Eerdere resultaten aangetroffen vanuit deze configuratie (%s). Berekening wordt overgeslagen. Indien er nieuwe data is toegevoegd, verwijder dan de bestanden uit de map resultaten_csv.",
