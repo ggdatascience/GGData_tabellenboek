@@ -78,6 +78,22 @@ log.level = DEBUG
              "dichotoom", "niet_dichotoom", "forceer_datatypen")
   for (sheet in sheets) {
     tmp = read.xlsx(config.file, sheet=sheet)
+    
+    # om de configuratielast te verlichten is het mogelijk om tabbladen over te erven uit andere configuraties
+    # hiervoor dient in cel A1 "KOPIEER" te staan, en in cel A2 een pad naar de gewenste xlsx met een identieke tabbladnaam
+    if (ncol(tmp) == 1 && colnames(tmp) == "KOPIEER") {
+      if (nrow(tmp) < 1) {
+        msg("Tabblad %s zou volgens de configuratie overgenomen moeten worden van een ander bestand, maar er is geen bestand opgegeven.", sheet, level=ERR)
+      }
+      
+      replacement.file = tmp$KOPIEER[1]
+      if (!file.exists(replacement.file)) {
+        msg("Tabblad %s zou volgens de configuratie overgenomen moeten worden van %s, maar dit bestand is niet gevonden. Let op: relatieve paden worden gelezen vanaf het configuratiebestand.", sheet, replacement.file, level=ERR)
+      }
+      
+      tmp = read.xlsx(replacement.file, sheet=sheet)
+    }
+    
     if (ncol(tmp) == 1) tmp = tmp[[1]]
     assign(sheet, tmp, envir=.GlobalEnv)
   }
@@ -513,9 +529,9 @@ log.level = DEBUG
     varlist.prev = read.csv(sprintf("resultaten_csv/vars_%s.csv", basename(config.file)), fileEncoding="UTF-8")
     
     # kolomkoppen mogen verschillen tussen varlist en varlist.prev, dus we kopieren gewoon simpelweg
-    if ("kolomkoppen" %in% varlist.prev)
+    if ("kolomkoppen" %in% colnames(varlist.prev))
       varlist$kolomkoppen = varlist.prev$kolomkoppen
-    else if ("kolomkoppen" %in% varlist && !"kolomkoppen" %in% varlist.prev)
+    else if ("kolomkoppen" %in% colnames(varlist) && !"kolomkoppen" %in% colnames(varlist.prev))
       varlist.prev$kolomkoppen = varlist$kolomkoppen
     
     if (identical.enough(kolom_opbouw, kolom_opbouw.prev) && identical.enough(varlist, varlist.prev)) {
