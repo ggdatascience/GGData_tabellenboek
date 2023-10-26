@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="nl">
+    <head>
+        <title>Tabellenboek {titel}</title>
+        <style type="text/css">
+            * {
+                padding: 0;
+                margin: 0;
+            }
+
+            html {
+                font-family: "[font_type]";
+                font-size: [font_size];
+                color: [font_color];
+            }
+        
+            table {
+                width: 100%;
+            }
+            
+            tbody tr th {
+                width: 15%;
+                text-align: left;
+                font-weight: normal;
+            }
+            
+            tbody tr td {
+                min-width: 5%;
+                text-align: center;
+            }
+            
+            caption {
+                display: none;
+            }
+
+            h2 {
+                font-size: [titel_size];
+                color: [titel_color];
+                background-color: [titel_fill];
+            }
+
+            h3 {
+                font-size: [kop_size];
+                color: [kop_color];
+                background-color: [kop_fill];
+            }
+
+            .vraag {
+                font-size: [vraag_size];
+                color: [vraag_color];
+                background-color: [vraag_fill];
+            }
+        </style>
+    </head>
+
+    <body>
+        <h1>Tabellenboek {titel}</h1>
+
+        <div>{introtekst}</div>
+
+        <div>{tabellen}</div>
+    </body>
+</html>
