@@ -13,9 +13,15 @@
                 font-size: [font_size];
                 color: [font_color];
             }
+
+            body {
+                max-width: 1400px;
+                margin: 0 auto 0 auto;
+            }
         
             table {
                 width: 100%;
+                border-collapse: collapse;
             }
             
             tbody tr th {
@@ -37,12 +43,14 @@
                 font-size: [titel_size];
                 color: [titel_color];
                 background-color: [titel_fill];
+                padding: 3px;
             }
 
             h3 {
                 font-size: [kop_size];
                 color: [kop_color];
                 background-color: [kop_fill];
+                padding: 3px;
             }
 
             .vraag {
@@ -50,14 +58,34 @@
                 color: [vraag_color];
                 background-color: [vraag_fill];
             }
+
+            .sign {
+                font-weight: bold;
+                border: 1px rgb(255, 0, 0) solid;
+                border-radius: 5px;
+            }
+
+            .kolom_a {
+                background-color: #FFFFFF;
+            }
+
+            .kolom_b {
+                background-color: #F2F2F2;
+            }
+
+            .rij_a {
+                background-color: #FFFFFF;
+            }
+
+            .rij_b {
+                background-color: #F2F2F2;
+            }
         </style>
     </head>
 
     <body>
-        <h1>Tabellenboek {titel}</h1>
-
         <div>{introtekst}</div>
 
-        <div>{tabellen}</div>
+        <div id="container">{tabellen}</div>
     </body>
 </html>

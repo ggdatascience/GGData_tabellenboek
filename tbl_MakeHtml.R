@@ -78,6 +78,68 @@ design = function (var) {
   return(ret)
 }
 
+BuildHtmlTableRows = function (input, col.design) {
+  # input is als het goed is een data.frame met twee datakolommen (label en sign), en dan een reeks waarden
+  # gewenste output is opgemaakte rijen met significantie aangegeven
+  
+  # kolomindeling, nodig als kolommen per crossing gekleurd moeten worden
+  colors = group_indices(col.design %>% group_by(dataset, subset, year, crossing))
+  
+  output = ""
+  for (i in 1:nrow(input)) {
+    htmlclass = ""
+    if (design("rijen_afwisselend_kleuren")) {
+      if (i %% 2 == 0)
+        htmlclass = "rij_b"
+      else
+        htmlclass = "rij_a"
+    }
+    
+    output = paste0(output, sprintf('<tr%s><th scope="row">%s</th>', htmlclass, input$label[i]))
+    for (c in 1:(ncol(input) - 2)) {
+      val = input[i, c+2]
+      htmlclass = c()
+      
+      if (val == A_TOOSMALL) {
+        val = algemeen$tekst_min_antwoord_niet_gehaald
+        htmlclass = c(htmlclass, "antwoord_niet_gehaald")
+      } else if (val == Q_TOOSMALL) {
+        val = algemeen$tekst_min_vraag_niet_gehaald
+        htmlclass = c(htmlclass, "vraag_niet_gehaald")
+      } else if (val == Q_MISSING) {
+        val = algemeen$tekst_missende_data
+        htmlclass = c(htmlclass, "data_missend")
+      } else {
+        val = sprintf("%.0f", val)
+        if (c %in% unlist(input$sign[i])) {
+          htmlclass = c(htmlclass, "sign")
+        }
+      } 
+      
+      # kolom kleuren o.b.v. crossing of index?
+      if (design("kolommen_afwisselend_kleuren")) {
+        if (c %% 2 == 0)
+          htmlclass = c(htmlclass, "kolom_b")
+        else
+          htmlclass = c(htmlclass, "kolom_a")
+      } else if (design("kolommen_crossings_kleuren")) {
+        if (colors[c] %% 2 == 0)
+          htmlclass = c(htmlclass, "kolom_b")
+        else
+          htmlclass = c(htmlclass, "kolom_a")
+      }
+      
+      # klassen toevoegen aan de opmaak
+      htmlclass = ifelse(length(htmlclass) > 0, sprintf(' class="%s"', str_c(htmlclass, collapse=" ")), "")
+      
+      output = paste0(output, sprintf("<td%s>%s</td>", htmlclass, val))
+    }
+    output = paste0(output, "</tr>\r\n")
+  }
+  
+  return(output)
+}
+
 # col.design = kolom_opbouw
 # subset = "Gemeentecode"
 # subset.val = 197
@@ -96,6 +158,7 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
   template = str_replace_all(template, fixed("{titel}"), subset.name)
   
   # opmaak
+  # TODO: font-weight: bold en font-decoration: underline etc. toevoegen
   design.vars = str_extract_all(template, "\\[[a-zA-Z_]+\\]") %>% unlist() %>% str_sub(start=2, end=-2)
   for (var in design.vars) {
     template = str_replace_all(template, fixed(paste0("[", var, "]")), design(var))
@@ -159,12 +222,34 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
     labels.output = paste0(labels.output, "</tr>\r\n<tr><td />")
   }
   
+  # afwisselend kleuren van kolommen/groepen?
+  colors = group_indices(col.design %>% group_by(dataset, subset, year, crossing))
+  perc.row.output = "<tr><td />"
   for (i in 1:nrow(col.design)) {
+    # kolom kleuren o.b.v. crossing of index?
+    htmlclass = NA
+    if (design("kolommen_afwisselend_kleuren")) {
+      if (i %% 2 == 0)
+        htmlclass = "kolom_b"
+      else
+        htmlclass = "kolom_a"
+    } else if (design("kolommen_crossings_kleuren")) {
+      if (colors[i] %% 2 == 0)
+        htmlclass = "kolom_b"
+      else
+        htmlclass = "kolom_a"
+    }
+    htmlclass = ifelse(!is.na(htmlclass), sprintf(' class="%s"', htmlclass), "")
+    
+    # rij met percentages vullen
+    perc.row.output = paste0(perc.row.output, "<td", htmlclass, ">%</td>")
+    
     # indien crossing, label van de waarde
     if (!is.na(col.design$crossing.lab[i])) {
       # TODO: iets doen met kleinere labels voor crossings
       # if (design("crossing_headers_kleiner") && sum(!is.na(col.design$crossing)) > 0)
-      labels.output = paste0(labels.output, sprintf("<th scope=\"col\">%s</th>", col.design$crossing.lab[i]))
+      
+      labels.output = paste0(labels.output, sprintf("<th scope=\"col\"%s>%s</th>", htmlclass, col.design$crossing.lab[i]))
       next
     }
     
@@ -187,20 +272,12 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
     # tekstopmaak is in te stellen in de configuratie -> [naam] en [jaar] worden vervangen
     col.name = str_replace(str_replace(design("header_template"), fixed("[naam]"), col.name), fixed("[jaar]"), ifelse(!is.na(col.design$year[i]), col.design$year[i], ""))
     
-    labels.output = paste0(labels.output, sprintf("<th scope=\"col\">%s</th>", col.name))
+    labels.output = paste0(labels.output, sprintf("<th scope=\"col\"%s>%s</th>", htmlclass, col.name))
   }
   
   # samenvoegen tot een coherent geheel
   header.output = paste0(cols.output, "<thead>\r\n", labels.output, "</thead>\r\n")
-  
-  # opslag voor rijen die later aangemaakt of opgemaakt moeten worden
-  header.col.rows = numeric(0)
-  data.rows = numeric(0)
-  title.rows = numeric(0)
-  perc.rows = numeric(0)
-  label.oversized.rows = numeric(0)
-  
-  # c = 1 # teller voor rijen in Excel
+  perc.row.output = paste0(perc.row.output, "</tr>\r\n")
   
   # moet er introtekst bij?
   if (nrow(intro_tekst) > 0) {
@@ -208,17 +285,37 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
     intro_tekst$inhoud = str_replace_all(intro_tekst$inhoud, fixed("[naam]"), subset.name)
     
     # html voor titels en koppen toevoegen
-    intro_tekst$inhoud[intro_tekst$type == "titel"] = sprintf("<h2>%s</h2>", intro_tekst$inhoud[intro_tekst$type == "titel"])
-    intro_tekst$inhoud[intro_tekst$type == "kop"] = sprintf("<h3>%s</h3>", intro_tekst$inhoud[intro_tekst$type == "kop"]) 
+    intro_tekst$inhoud[intro_tekst$type == "titel"] = sprintf("<h1>%s</h1>", intro_tekst$inhoud[intro_tekst$type == "titel"])
+    intro_tekst$inhoud[intro_tekst$type == "kop"] = sprintf("<h2>%s</h2>", intro_tekst$inhoud[intro_tekst$type == "kop"]) 
     # lege waarden worden geprint als NA; dat willen we niet
     intro_tekst$inhoud[is.na(intro_tekst$inhoud)] = ""
+    
+    # extra witregel voor de volgende sectie, tenzij de laatste regel een witregel is
+    if (!is.na(intro_tekst$inhoud[nrow(intro_tekst)])) intro_tekst = bind_rows(intro_tekst, data.frame(type="tekst", inhoud="<br />"))
     
     template = str_replace(template, fixed("{introtekst}"), str_c(intro_tekst$inhoud, collapse="<br />\n"))
   }
   
   indeling_rijen$type = str_to_lower(str_trim(indeling_rijen$type))
   table.output = c()
+  # er is een tijdelijke opslag nodig voor niet-dichotome variabelen die achter elkaar moeten
+  table.cache = NULL # hier is NULL nodig i.p.v. NA, omdat is.na() een vector teruggeeft, en we willen alleen weten of de variabele gevuld is of niet
+  question.cache = NA
   for (i in 1:nrow(indeling_rijen)) {
+    # als er iets in de tijdelijke opslag zit en de huidige regel != "var", printen
+    if (!is.null(table.cache) && indeling_rijen$type[i] != "var") {
+      table.output = c(table.output, paste0("<table>\r\n",
+                                            "<caption>", question.cache, "</caption>\r\n",
+                                            header.output, "\r\n",
+                                            perc.row.output,
+                                            "<tbody>\r\n",
+                                            BuildHtmlTableRows(table.cache, col.design),
+                                            "</tbody>\r\n",
+                                            "</table>\r\n<br />\r\n"))
+      question.cache = NA
+      table.cache = NULL
+    }
+    
     if (indeling_rijen$type[i] %in% c("titel", "kop", "vraag", "tekst")) { # regel met een titel, kop, of tekst
       # een extra witregel voor koppen of titels
       if (indeling_rijen$type[i] != "tekst") {
@@ -230,13 +327,16 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
       
       # opmaak toevoegen
       if (indeling_rijen$type[i] == "titel") {
-        output = sprintf("<h2>%s</h2>", output)
+        output = sprintf("<h2>%s</h2>\r\n", output)
+        # als de volgende regel geen kop of vraag is: extra witregel
+        if (i < nrow(indeling_rijen) && !indeling_rijen$type[i+1] %in% c("kop", "vraag", "aantallen")) 
+          output = paste0(output, "<br />\r\n")
       } else if (indeling_rijen$type[i] == "kop") {
+        question.cache = output
         output = sprintf("<h3>%s</h3>", output)
       } else if (indeling_rijen$type[i] == "vraag") {
+        question.cache = output
         output = sprintf("<h3 class=\"vraag\">%s</h3>", output)
-        
-        # kolomkoppen toevoegen?
       } else { # tekst
         output = sprintf("%s<br />", output)
       }
@@ -268,18 +368,27 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
         }
       }    
 
-      # header toevoegen
+      output = output %>% as.data.frame() %>% mutate(label="Aantal deelnemers", sign=NA, .before=1)
       
       table.output = c(table.output, paste0("<table>\r\n",
                                             "<caption>Aantal deelnemers</caption>",
                                             header.output,
-                                            "<tbody>\r\n<tr><th scope=\"row\">Aantal deelnemers</td>", str_c(sprintf("<td>%d</td>", output), collapse=""), "</tr>\r\n</tbody>\r\n",
+                                            "<tbody>\r\n",
+                                            BuildHtmlTableRows(output, col.design),
+                                            "</tbody>\r\n",
                                             "</table>\r\n"))
     } else if (indeling_rijen$type[i] == "var") { # variabele toevoegen
       if (!indeling_rijen$inhoud[i] %in% colnames(data)) {
         msg("Variabele %s komt niet voor in de resultaten. Deze wordt overgeslagen. Controleer de configuratie.", indeling_rijen$inhoud[i], level=WARN)
         next
       }
+      
+      # Nu wordt het verhaal een beetje ingewikkeld...
+      # We hebben dichotome en niet-dichotome variabelen, waarbij niet-dichotome variabelen vaak onder elkaar worden geplaatst in 1 tabel.
+      # Binnen Excel was dit geen probleem; gewoon stiekem een rij toevoegen zonder kop en ergens verzinnen dat er een kop boven moest...
+      # Bij HTML-bestanden werkt dit helaas niet zo, daar moeten we de tabel als geheel opzetten.
+      # Dit betekent dat we een tijdelijke tabel met voorgaande resultaten moeten opbouwen, welke pas in het document geplakt wordt als
+      # er géén dichotome variabele meer volgt. (Let op: er kan een witregel tussen zitten! )
       
       # benodigde resultaten ophalen, zodat we niet steeds belachelijke selectors nodig hebben
       data.var = data.frame()
@@ -361,7 +470,13 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
       
       # significante resultaten zichtbaar maken
       sign = data.var[which(data.var$sign < algemeen$confidence_level), c("val", "col.index")]
-      sign$rij = sapply(sign$val, function (v) which(rownames(output) == v))
+      
+      
+      # output herschrijven naar een bruikbaar formaat
+      output = output %>% as.data.frame() %>% rownames_to_column("val") %>%
+        mutate(label=sapply(val, function(v) var_labels$label[var_labels$var == indeling_rijen$inhoud[i] & var_labels$val == as.character(v)]),
+               sign=sapply(val, function(v) list(sign$col.index[sign$val == v]))) %>%
+        relocate(label, sign)
       
       # dichotoom? zo ja, alleen 1 (= ja) laten zien en geen kop met de vraag
       # zo nee, kop met de vraag en alle waardes laten zien
@@ -376,52 +491,43 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
           (indeling_rijen$inhoud[i] %in% dichotoom ||
            isTRUE(all.equal(levels.var, c(0, 1))) ||
            any(unlist(lapply(dichotoom.vals, function (x) { return(identical(x, levels.var)) }))))) {
-        output = output %>% as.data.frame() %>% rownames_to_column("val") %>% filter(val == 1) %>%
-          mutate(label=var_labels$label[var_labels$var == indeling_rijen$inhoud[i] & var_labels$val == "var"],
-                 matchcode=paste0(indeling_rijen$inhoud[i], val)) %>%
-          relocate(matchcode, label) %>%
+        output = output %>%
+          filter(val == 1) %>%
+          mutate(label=var_labels$label[var_labels$var == indeling_rijen$inhoud[i] & var_labels$val == "var"], .after=val) %>%
           select(-val)
         
-        # significantie ook aanpassen naar 1 regel
-        sign = sign %>% filter(val == 1) %>% mutate(rij=1)
-        
-        # is de vorige regel een kop? dan headers en percentages toevoegen
-        # als de vorige regel een vraag is dan heeft deze dat al
-        if (i > 1 && indeling_rijen$type[i-1] == "kop" && is.na(indeling_rijen$kolomkoppen[i])) {
-          # TODO: herschrijven
-          # ruimte vrijhouden voor het later invoegen van headers
-          # header.col.rows = c(header.col.rows, c)
-          # c = c + header.col.nrows
-          # 
-          # # TODO: nvar toevoegen?
-          # # regel met procenttekens
-          # writeData(wb, subset.name, t(rep("%", n.col)), startCol=3, startRow=c, colNames=F)
-          # addStyle(wb, subset.name, style.perc, cols=3:n.col.total, rows=c, gridExpand=T, stack=T)
-          # perc.rows = c(perc.rows, c)
-          # c = c + 1
+        if (!is.null(table.cache)) {
+          table.cache = bind_rows(table.cache, output)
+        } else {
+          table.cache = output
         }
       } else { # niet dichotoom
-        # labels toevoegen
-        output = output %>% as.data.frame() %>% rownames_to_column("val") %>%
-          mutate(label=sapply(val, function(v) var_labels$label[var_labels$var == indeling_rijen$inhoud[i] & var_labels$val == as.character(v)]),
-                 matchcode=paste0(indeling_rijen$inhoud[i], val)) %>%
-          relocate(matchcode, label) %>%
+        output = output %>%
           select(-val)
         
-        # c = c + 1 # witregel na vorig blok
+        # moet er nog een vorige tabel geprint worden?
+        if (!is.null(table.cache)) {
+          table.output = c(table.output, paste0("<table>\r\n",
+                                                "<caption>", question.cache, "</caption>\r\n",
+                                                header.output, "\r\n",
+                                                perc.row.output,
+                                                "<tbody>\r\n",
+                                                BuildHtmlTableRows(table.cache, col.design),
+                                                "</tbody>\r\n",
+                                                "</table>\r\n<br />\r\n"))
+          question.cache = NA
+          table.cache = NULL
+        }
         
         # tabel invoegen
-        #browser()
         table.output = c(table.output, paste0("<h3 class=\"vraag\">", var_labels$label[var_labels$var == indeling_rijen$inhoud[i] & var_labels$val == "var"], "</h3>",
                                               "<table>\r\n",
                                               # titel van de vraag toevoegen
                                               "<caption>", var_labels$label[var_labels$var == indeling_rijen$inhoud[i] & var_labels$val == "var"], "</caption>\r\n",
                                               ifelse(is.na(indeling_rijen$kolomkoppen[i]), header.output, ""), "\r\n", # kolomkoppen alleen indien gewenst
-                                              "<tr><td />", str_c(rep("<td>%</td>", n.col), collapse=""), "</tr>\r\n",
+                                              perc.row.output,
                                               "<tbody>\r\n",
-                                              str_c(sapply(1:nrow(output), function (r) {
-                                                return(sprintf('<tr><th scope="row">%s</th>%s</tr>', output$label[r], str_c(sprintf("<td>%.0f</td>", output[r,-c(1:2)]), collapse="")))
-                                              }), collapse="\r\n"),
+                                              BuildHtmlTableRows(output, col.design),
                                               "</tbody>\r\n",
                                               "</table>\r\n"))
       }
@@ -433,27 +539,6 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
       # }
       
       # TODO: wegschrijven dichotoom
-      
-      # TODO: missende waardes goed weergeven
-      # missing = which(output == Q_MISSING | output == Q_TOOSMALL | output == A_TOOSMALL, arr.ind=T)
-      # if (length(missing) > 0) {
-      #   # vanwege gekke R logica mag de waarde geen naam hebben (unname) en moet het gedwongen een matrix zijn
-      #   replacement = data.frame(row=missing[,1], col=missing[,2], val=matrix(unname(output[missing])))
-      #   
-      #   for (i in 1:nrow(replacement)) {
-      #     val = algemeen$tekst_missende_data
-      #     if (as.numeric(replacement$val[i]) == Q_TOOSMALL) val = algemeen$tekst_min_vraag_niet_gehaald
-      #     if (as.numeric(replacement$val[i]) == A_TOOSMALL) val = algemeen$tekst_min_antwoord_niet_gehaald
-      #     writeData(wb, subset.name, val, startCol=replacement$col[i], startRow=c+replacement$row[i]-1, colNames=F)
-      #   }
-      # }
-      # 
-      # # significantie weergeven
-      # if (nrow(sign) > 0) {
-      #   addStyle(wb, subset.name, style.sign, rows=c-1+sign$rij, cols=2+sign$col.index, stack=T)
-      # }
-      # data.rows = c(data.rows, c:(c+nrow(output)-1))
-      # c = c + nrow(output)
     }
   }
   

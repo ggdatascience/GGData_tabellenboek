@@ -790,32 +790,11 @@ log.level = DEBUG
     }
   }
   
-  if (T) {
-    # uitdraaien tabellenboeken
-    source(paste0(dirname(this.path()), "/tbl_MakeExcel.R"))
-    if (is.null(subsetmatches)) {
-      # geen subsets, 1 tabellenboek
-      msg("Tabellenboek wordt gemaakt: Overzicht.xlsx.", level=MSG)
-      MakeExcel(results, var_labels, kolom_opbouw, NA, NA, subsetmatches)
-    } else {
-      # wel subsets, meerdere tabellenboeken
-      subsetvals = subsetmatches[,1]
-      for (s in 1:length(subsetvals)) {
-        if (sum(results$subset == colnames(subsetmatches)[1] & results$subset.val == subsetvals[s], na.rm=T) < 1)
-          next # geen data gevonden voor deze subset, overslaan
-        
-        msg("Tabellenboek voor %s wordt gemaakt.", names(subsetvals[s]), level=MSG)
-        MakeExcel(results, var_labels, kolom_opbouw, colnames(subsetmatches)[1], subsetvals[s], subsetmatches)
-      }
-    }
-  }
-  
-  if (F) {
+  if (!is.na(algemeen$template_html)) {
     # uitdraaien tabellenboeken in HTML-vorm voor digitoegankelijkheid
     source(paste0(dirname(this.path()), "/tbl_MakeHtml.R"))
     
-    # TODO: dynamisch maken
-    template_html = read_file("template_digitoegankelijk.html")
+    template_html = read_file(algemeen$template_html)
     
     if (is.null(subsetmatches)) {
       # geen subsets, 1 tabellenboek
@@ -831,6 +810,24 @@ log.level = DEBUG
         msg("Digitoegankelijk tabellenboek voor %s wordt gemaakt.", names(subsetvals[s]), level=MSG)
         MakeHtml(results, var_labels, kolom_opbouw, colnames(subsetmatches)[1], subsetvals[s], subsetmatches, template_html)
       }
+    }
+  }
+  
+  # uitdraaien tabellenboeken
+  source(paste0(dirname(this.path()), "/tbl_MakeExcel.R"))
+  if (is.null(subsetmatches)) {
+    # geen subsets, 1 tabellenboek
+    msg("Tabellenboek wordt gemaakt: Overzicht.xlsx.", level=MSG)
+    MakeExcel(results, var_labels, kolom_opbouw, NA, NA, subsetmatches)
+  } else {
+    # wel subsets, meerdere tabellenboeken
+    subsetvals = subsetmatches[,1]
+    for (s in 1:length(subsetvals)) {
+      if (sum(results$subset == colnames(subsetmatches)[1] & results$subset.val == subsetvals[s], na.rm=T) < 1)
+        next # geen data gevonden voor deze subset, overslaan
+      
+      msg("Tabellenboek voor %s wordt gemaakt.", names(subsetvals[s]), level=MSG)
+      MakeExcel(results, var_labels, kolom_opbouw, colnames(subsetmatches)[1], subsetvals[s], subsetmatches)
     }
   }
 }
