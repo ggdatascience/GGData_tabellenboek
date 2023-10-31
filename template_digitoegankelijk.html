@@ -18,6 +18,12 @@
                 max-width: 1400px;
                 margin: 0 auto 0 auto;
             }
+
+            #menu {
+                position: fixed;
+                right: 100px;
+                top: 5px;
+            }
         
             table {
                 width: 100%;
@@ -61,8 +67,8 @@
 
             .sign {
                 font-weight: bold;
-                border: 1px rgb(255, 0, 0) solid;
-                border-radius: 5px;
+                /*border: 1px rgb(255, 0, 0) solid;
+                border-radius: 5px;*/
             }
 
             .kolom_a {
@@ -81,9 +87,37 @@
                 background-color: #F2F2F2;
             }
         </style>
+
+        <script type="text/javascript">
+            function menu () {
+                headers = document.getElementsByClassName("heading");
+                select = document.getElementById("menu_dropdown");
+
+                for (i = 0; i < headers.length; i++) {
+                    header = headers[i];
+                    el = document.createElement("option");
+                    el.innerText = (header.nodeName.substr(1,1) == "2" ? "" : "- ") + header.innerText;
+                    el.setAttribute("target", header.getAttribute("id"));
+                    select.appendChild(el);
+                }
+            }
+
+            function menu_selected () {
+                select = document.getElementById("menu_dropdown");
+                if (select.selectedOptions !== null) {
+                    target = select.selectedOptions[0].getAttribute("target");
+                    document.getElementById(target).scrollIntoView();
+                }
+            }
+        </script>
     </head>
 
-    <body>
+    <body onLoad="menu()">
+        <div id="menu">
+            <label for="menu_dropdown">Spring direct naar:</label>
+            <select id="menu_dropdown" name="menu_dropdown" onchange="if (this.selectedIndex) menu_selected();"></select>
+        </div>
+
         <div>{introtekst}</div>
 
         <div id="container">{tabellen}</div>

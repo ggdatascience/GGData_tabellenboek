@@ -159,7 +159,7 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
   
   # opmaak
   # TODO: font-weight: bold en font-decoration: underline etc. toevoegen
-  design.vars = str_extract_all(template, "\\[[a-zA-Z_]+\\]") %>% unlist() %>% str_sub(start=2, end=-2)
+  design.vars = str_extract_all(template, "\\[[a-zA-Z_]{3,}\\]") %>% unlist() %>% str_sub(start=2, end=-2)
   for (var in design.vars) {
     template = str_replace_all(template, fixed(paste0("[", var, "]")), design(var))
   }
@@ -327,16 +327,16 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
       
       # opmaak toevoegen
       if (indeling_rijen$type[i] == "titel") {
-        output = sprintf("<h2>%s</h2>\r\n", output)
+        output = sprintf("<h2 class=\"heading\" id=\"heading_%d\">%s</h2>\r\n", i, output)
         # als de volgende regel geen kop of vraag is: extra witregel
         if (i < nrow(indeling_rijen) && !indeling_rijen$type[i+1] %in% c("kop", "vraag", "aantallen")) 
           output = paste0(output, "<br />\r\n")
       } else if (indeling_rijen$type[i] == "kop") {
         question.cache = output
-        output = sprintf("<h3>%s</h3>", output)
+        output = sprintf("<h3 class=\"heading\" id=\"heading_%d\">%s</h3>", i, output)
       } else if (indeling_rijen$type[i] == "vraag") {
         question.cache = output
-        output = sprintf("<h3 class=\"vraag\">%s</h3>", output)
+        output = sprintf("<h3 class=\"heading vraag\" id=\"heading_%d\">%s</h3>", i, output)
       } else { # tekst
         output = sprintf("%s<br />", output)
       }
