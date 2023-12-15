@@ -109,6 +109,11 @@ log.level = DEBUG
     algemeen$afkapwaarde_antwoord = 0.0
   }
   
+  # bestaat het templatebestand voor digitoegankelijkheid? (indien gewenst)
+  if (!is.na(algemeen$template_html) && !file.exists(algemeen$template_html)) {
+    msg("Het templatebestand voor digitoegankelijke tabellenboeken is niet gevonden. Controleer de configuratie: tabblad algemeen, kolom template_html.", algemeen$template_html, level=ERR)
+  }
+  
   # sanity checks op indeling_rijen
   if (any(is.na(indeling_rijen$type)) || any(!indeling_rijen$type %in% c("aantallen", "var", "titel", "kop", "vraag", "tekst"))) {
     msg("Ongeldige waardes aangetroffen in de kolom type van tabblad indeling_rijen. Het betreft rij(en) %s. Geldige waardes zijn 'aantallen', 'var', 'titel', 'kop', 'vraag', of 'tekst'.",
@@ -427,7 +432,8 @@ log.level = DEBUG
         test.col.cache = bind_rows(test.col.cache, data.frame(col.index=nrow(kolom_opbouw)+1, test.col=onderdelen$sign_totaal[i]))
       }
     } else {
-      test.col = NA
+      msg("Let op! Onderdeel %d (dataset %s, subset %s)  heeft een ongeldige waarde in de kolom sign_totaal. Hier is alleen een getal, de naam van een dataset, of een lege cel toegestaan.",
+          i, onderdelen$dataset[i], onderdelen$subset[i], level=ERR)
     }
     
     kolom_opbouw = bind_rows(kolom_opbouw, data.frame(col.index=nrow(kolom_opbouw)+1, dataset=d, subset=onderdelen$subset[i], year=onderdelen$jaar[i],
