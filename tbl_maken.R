@@ -318,6 +318,8 @@ log.level = DEBUG
     colname = colnames(data)[i]
     if (!is.null(var_label(data[[i]]))) {
       var_labels = bind_rows(var_labels, data.frame(var=colname, val="var", label=var_label(data[[i]])))
+    } else {
+      var_labels = bind_rows(var_labels, data.frame(var=colname, val="var", label=NA))
     }
     labels = val_labels(data[[i]])
     if (!is.null(labels)) {
@@ -431,7 +433,7 @@ log.level = DEBUG
         test.col = NA
         test.col.cache = bind_rows(test.col.cache, data.frame(col.index=nrow(kolom_opbouw)+1, test.col=onderdelen$sign_totaal[i]))
       }
-    } else {
+    } else if (!is.na(onderdelen$sign_totaal[i])) {
       msg("Let op! Onderdeel %d (dataset %s, subset %s)  heeft een ongeldige waarde in de kolom sign_totaal. Hier is alleen een getal, de naam van een dataset, of een lege cel toegestaan.",
           i, onderdelen$dataset[i], onderdelen$subset[i], level=ERR)
     }
