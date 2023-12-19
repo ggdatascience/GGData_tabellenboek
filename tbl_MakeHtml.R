@@ -537,9 +537,21 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
       # if (length(labels.oversized) > 0) {
       #   label.oversized.rows = c(label.oversized.rows, c + labels.oversized - 1)
       # }
-      
-      # TODO: wegschrijven dichotoom
     }
+  }
+  
+  # als er nog iets in de tijdelijke opslag zit, printen
+  if (!is.null(table.cache)) {
+    table.output = c(table.output, paste0("<table>\r\n",
+                                          "<caption>", question.cache, "</caption>\r\n",
+                                          header.output, "\r\n",
+                                          perc.row.output,
+                                          "<tbody>\r\n",
+                                          BuildHtmlTableRows(table.cache, col.design),
+                                          "</tbody>\r\n",
+                                          "</table>\r\n<br />\r\n"))
+    question.cache = NA
+    table.cache = NULL
   }
   
   # laatste regel aanhouden als einde, zodat de kleuren niet doorlopen
