@@ -536,13 +536,16 @@ log.level = DEBUG
     kolom_opbouw.prev = read.csv(sprintf("resultaten_csv/settings_%s.csv", basename(config.file)), fileEncoding="UTF-8")
     varlist.prev = read.csv(sprintf("resultaten_csv/vars_%s.csv", basename(config.file)), fileEncoding="UTF-8")
     
-    # kolomkoppen mogen verschillen tussen varlist en varlist.prev, dus we kopieren gewoon simpelweg
+    # TODO: klopt niet, logica oplossen
+    # kolomkoppen mogen verschillen tussen varlist en varlist.prev, dus we maken een 'vergelijkingsset' zonder die kolommen
+    varlist.cmp = varlist
+    varlist.prev.cmp = varlist.prev
+    if ("kolomkoppen" %in% colnames(varlist))
+      varlist.cmp = varlist[,-"kolomkoppen"]
     if ("kolomkoppen" %in% colnames(varlist.prev))
-      varlist$kolomkoppen = varlist.prev$kolomkoppen
-    else if ("kolomkoppen" %in% colnames(varlist) && !"kolomkoppen" %in% colnames(varlist.prev))
-      varlist.prev$kolomkoppen = varlist$kolomkoppen
+      varlist.prev.cmp = varlist.prev[,-"kolomkoppen"]
     
-    if (identical.enough(kolom_opbouw, kolom_opbouw.prev) && identical.enough(varlist, varlist.prev)) {
+    if (identical.enough(kolom_opbouw, kolom_opbouw.prev) && identical.enough(varlist.cmp, varlist.prev.cmp)) {
       msg("Eerdere resultaten aangetroffen vanuit deze configuratie (%s). Berekening wordt overgeslagen. Indien er nieuwe data is toegevoegd, verwijder dan de bestanden uit de map resultaten_csv.",
           basename(config.file), level=MSG)
       
