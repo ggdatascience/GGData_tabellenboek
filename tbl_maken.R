@@ -127,6 +127,13 @@ log.level = DEBUG
     msg("Er is geen kolom met de naam 'kolomkoppen' aanwezig in indeling_rijen. Standaardwaarden (kolomkoppen bij iedere vraag) worden aangenomen.", level=WARN)
   }
   
+  # idem voor gewenste waardes; missend is 'normaal', gespecificeerd verandert het gedrag
+  # we kunnen dus probleemloos een lege kolom toevoegen
+  if (!"waardes" %in% colnames(indeling_rijen)) {
+    indeling_rijen$waardes = rep(NA, nrow(indeling_rijen))
+    msg("Er is geen kolom met de naam 'waardes' aanwezig in indeling_rijen. Standaardinstelling (alle antwoorden in oplopende volgorde) wordt aangenomen.", level=WARN)
+  }
+  
   # variabelelijst afleiden uit de indeling van het tabellenboek;
   # iedere regel met (n)var is een variabele die we nodig hebben
   varlist = indeling_rijen[indeling_rijen$type %in% c("var", "nvar"),]
@@ -536,14 +543,9 @@ log.level = DEBUG
     kolom_opbouw.prev = read.csv(sprintf("resultaten_csv/settings_%s.csv", basename(config.file)), fileEncoding="UTF-8")
     varlist.prev = read.csv(sprintf("resultaten_csv/vars_%s.csv", basename(config.file)), fileEncoding="UTF-8")
     
-    # TODO: klopt niet, logica oplossen
-    # kolomkoppen mogen verschillen tussen varlist en varlist.prev, dus we maken een 'vergelijkingsset' zonder die kolommen
-    varlist.cmp = varlist
-    varlist.prev.cmp = varlist.prev
-    if ("kolomkoppen" %in% colnames(varlist))
-      varlist.cmp = varlist[,-"kolomkoppen"]
-    if ("kolomkoppen" %in% colnames(varlist.prev))
-      varlist.prev.cmp = varlist.prev[,-"kolomkoppen"]
+    # kolomkoppen en waardes mogen verschillen tussen varlist en varlist.prev, dus we maken een 'vergelijkingsset' zonder die kolommen
+    varlist.cmp = varlist %>% select(type, inhoud, starts_with("weeg"))
+    varlist.prev.cmp = varlist.prev %>% select(type, inhoud, starts_with("weeg"))
     
     if (identical.enough(kolom_opbouw, kolom_opbouw.prev) && identical.enough(varlist.cmp, varlist.prev.cmp)) {
       msg("Eerdere resultaten aangetroffen vanuit deze configuratie (%s). Berekening wordt overgeslagen. Indien er nieuwe data is toegevoegd, verwijder dan de bestanden uit de map resultaten_csv.",

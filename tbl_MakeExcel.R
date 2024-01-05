@@ -312,6 +312,13 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
       
       # significante resultaten zichtbaar maken
       sign = data.var[which(data.var$sign < algemeen$confidence_level), c("val", "col.index")]
+      
+      # zijn er aparte wensen qua weergave van antwoordmogelijkheden?
+      if (!is.na(indeling_rijen$waardes[i])) {
+        desired_answers = str_split(indeling_rijen$waardes[i], ",") %>% unlist() %>% str_trim()
+        output = output[desired_answers,]
+      }
+      
       sign$rij = sapply(sign$val, function (v) which(rownames(output) == v))
       
       # dichotoom? zo ja, alleen 1 (= ja) laten zien en geen kop met de vraag
@@ -554,7 +561,7 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
   error = function(e){
     msg("Er is een fout opgetreden bij het maken van het Excelbestand: %s", e, level=MSG)
   },
-  warning = function(cond){
+  warning = function(e){
     msg("Er is een fout opgetreden bij het maken van het Excelbestand: %s", e, level=MSG)
   })
   

@@ -471,12 +471,18 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
       # significante resultaten zichtbaar maken
       sign = data.var[which(data.var$sign < algemeen$confidence_level), c("val", "col.index")]
       
-      
       # output herschrijven naar een bruikbaar formaat
       output = output %>% as.data.frame() %>% rownames_to_column("val") %>%
         mutate(label=sapply(val, function(v) var_labels$label[var_labels$var == indeling_rijen$inhoud[i] & var_labels$val == as.character(v)]),
                sign=sapply(val, function(v) list(sign$col.index[sign$val == v]))) %>%
         relocate(label, sign)
+      
+      # zijn er aparte wensen qua weergave van antwoordmogelijkheden?
+      if (!is.na(indeling_rijen$waardes[i])) {
+        desired_answers = str_split(indeling_rijen$waardes[i], ",") %>% unlist() %>% str_trim()
+        desired_rownums = sapply(desired_answers, function (a) { return(which(output$val == a)) })
+        output = output[desired_rownums,]
+      }
       
       # dichotoom? zo ja, alleen 1 (= ja) laten zien en geen kop met de vraag
       # zo nee, kop met de vraag en alle waardes laten zien
@@ -622,7 +628,8 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
   #   }
   # }
 
-  # tabellen toevoegen
+  # tabellen toevoegen en witregel aan het einde
+  table.output = c(table.output, "<br>\r\n")
   template = str_replace(template, fixed("{tabellen}"), str_c(table.output, collapse="\r\n"))
   
   # en als laatste... opslaan!
