@@ -18,9 +18,8 @@ DEBUG = 4
 # altijd wordt weergegeven (dus msg("test", WARN) wordt ook getoond bij log.level = 3) 
 # - msg kan een object of een sprintf-style string zijn
 # - level moet een log level zijn
-# - keep.log specificeert of de output opgeslagen dient te worden in een logboek 
 # - overige argumenten worden doorgegeven aan sprintf
-msg = function (msg, ..., level = DEBUG, keep.log = T) {
+msg = function (msg, ..., level = DEBUG) {
   # alleen output geven als het ewenste level gelijk is of hoger dan de gegeven waarde
   if (exists("log.level")) {
     if (level > log.level) {
@@ -29,10 +28,12 @@ msg = function (msg, ..., level = DEBUG, keep.log = T) {
   }
   
   # schrijf naar logbestand
-  if (is.character(msg)) {
-    cat(sprintf(paste0("[%s - %s] ", msg, "\n"), Sys.time(), deparse(substitute(level)), ...), file = "log.txt", append=T)
-  } else {
-    cat(sprintf(paste0("[%s - %s] ", msg, "\n"), Sys.time(), deparse(substitute(level))), file = "log.txt", append=T)
+  if (log.save) {
+    if (is.character(msg)) {
+      cat(sprintf(paste0("[%s - %s] ", msg, "\n"), Sys.time(), deparse(substitute(level)), ...), file = "log.txt", append=T)
+    } else {
+      cat(sprintf(paste0("[%s - %s] ", msg, "\n"), Sys.time(), deparse(substitute(level))), file = "log.txt", append=T)
+    }
   }
   
   # geen gewenst level of level hoog genoeg; printen

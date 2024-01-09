@@ -19,10 +19,21 @@
                 margin: 0 auto 0 auto;
             }
 
+            #container {
+                /*height: 100%;
+                width: 100%;
+                max-width: 1400px;
+                position: absolute;
+                overflow-x: scroll;*/
+            }
+
             #menu {
-                position: fixed;
-                right: 100px;
+                position: sticky;
                 top: 5px;
+                float: right;
+                background: rgba(255, 255, 255, 0.5);
+                border: rgba(255, 255, 255, 0.5) 0px solid;
+                border-radius: 5px;
             }
         
             table {
@@ -117,9 +128,12 @@
             <label for="menu_dropdown">Spring direct naar:</label>
             <select id="menu_dropdown" name="menu_dropdown" onchange="if (this.selectedIndex) menu_selected();"></select>
         </div>
-
-        <div>{introtekst}</div>
-
-        <div id="container">{tabellen}</div>
+        <div id="container">
+            
+    
+            <div>{introtekst}</div>
+    
+            <div id="tabellen">{tabellen}</div>
+        </div>
     </body>
 </html>

@@ -39,6 +39,8 @@ source("tbl_helpers.R")
 # als het level op MSG staat en er zou een WARN worden weergegeven is deze dus zichtbaar (maar andersom niet)
 # in het dagelijks gebruik is MSG ruim voldoende, zet DEBUG alleen aan bij het doorgeven van foutmeldingen aan de werkgroep
 log.level = DEBUG
+# log opslaan naar een tekstbestand?
+log.save = T
 
 # het gehele script wordt omgeven door curly brackets, zodat een stop() ook daadwerkelijk het script stopt
 {
@@ -173,7 +175,19 @@ log.level = DEBUG
       msg("De opgegeven dataset op rij %d eindigt niet in .sav. Mogelijk vergeten? .sav toegevoegd.", level=WARN, d+1)
     }
     
-    data = read_spss(datasets$bestandsnaam[d], user_na=T) %>% user_na_to_na()
+    # SPSS slaat 'gekke' leestekens (bijv. de Spaanse n met een ~, de Noorse o met een schuine streep, etc.) soms onjuist op
+    # dit zorgt dan voor een vastloper
+    # dit kunnen we voorkomen door encoding te forceren, maar tekst kan hierdoor wel aangepast worden
+    # gelukkig maakt het tabellenboek geen gebruik van open tekst, dus de schade zou minimaal moeten zijn
+    # zie ook de issue op https://github.com/tidyverse/haven/issues/615
+    data = tryCatch(read_spss(datasets$bestandsnaam[d], user_na=T) %>% user_na_to_na(),
+                    error=function(e) { 
+                      if (str_detect(as.character(e), "encoding")) {
+                        read_sav(datasets$bestandsnaam[d], user_na=T, encoding="latin1") %>% user_na_to_na()
+                      } else {
+                        msg("Fout tijdens het inlezen van dataset %d: %s", d, e, level=ERR)
+                      }
+                    })
     
     # afwijkende kolommen registreren zodat we deze later kunnen scheiden
     afwijkend = c()

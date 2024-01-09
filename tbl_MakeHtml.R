@@ -376,7 +376,7 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
                                             "<tbody>\r\n",
                                             BuildHtmlTableRows(output, col.design),
                                             "</tbody>\r\n",
-                                            "</table>\r\n"))
+                                            "</table><br />\r\n"))
     } else if (indeling_rijen$type[i] == "var") { # variabele toevoegen
       if (!indeling_rijen$inhoud[i] %in% colnames(data)) {
         msg("Variabele %s komt niet voor in de resultaten. Deze wordt overgeslagen. Controleer de configuratie.", indeling_rijen$inhoud[i], level=WARN)
@@ -535,7 +535,7 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
                                               "<tbody>\r\n",
                                               BuildHtmlTableRows(output, col.design),
                                               "</tbody>\r\n",
-                                              "</table>\r\n"))
+                                              "</table>\r\n<br />\r\n"))
       }
       
       # TODO: herschrijven

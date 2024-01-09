@@ -91,6 +91,9 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
         msg("Subset %d: dataset %d, subset %s, jaar %s, crossing %s", level=DEBUG,
             i, colgroups$dataset[i], colgroups$subset[i], colgroups$year[i], colgroups$crossing[i])
         
+        if (!(paste0("dummy._col", leadingcol, ".s.", unname(subsetvals[s])) %in% names(design$variables)))
+          next
+        
         # er zijn nu twee scenario's:
         # 1) originele subsetvariabele (of dezelfde subsetvariabele in een andere dataset) -> niks doen, subsetvals[s] bevat de nodige informatie
         # 2) een extra subsetvariabele, gebaseerd op de leidende subsetvariabele -> zoek welke overkoepelende subset hierbij hoort en vul die in
@@ -103,6 +106,14 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
         if (!is.na(colgroups$crossing[i])) {
           # dit betekent meerdere kolommen vullen, want crossing
           cols = col.design$col.index[group_rows(col.design)[[i]]]
+          
+          if (!all(paste0("dummy._col", cols, ".s.", subsetval) %in% names(design$variables))) {
+            msg("Er is geen data beschikbaar voor kolom %d bij dataset %d, subset %s, jaar %s, crossing %s, selectie %s.",
+                str_c(cols[!(paste0("dummy._col", cols, ".s.", subsetval) %in% names(design$variables))], collapse=", "),
+                colgroups$dataset[i], colgroups$subset[i], colgroups$year[i], colgroups$crossing[i], subsetval, level=WARN)
+            next
+          }
+          
           selection = str_c(paste0("dummy._col", cols, ".s.", subsetval), collapse=" | ")
           design.subset = subset(design, eval(parse(text=selection)))
           
@@ -150,6 +161,12 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
         } else {
           # geen crossing; totaal
           col = col.design$col.index[group_rows(col.design)[[i]]]
+          
+          if (!(paste0("dummy._col", col, ".s.", subsetval) %in% names(design$variables))) {
+            msg("Er is geen data beschikbaar voor kolom %d bij dataset %d, subset %s, jaar %s, selectie %s.",
+                col, colgroups$dataset[i], colgroups$subset[i], colgroups$year[i], subsetval, level=WARN)
+            next
+          }
           
           weighted = svytable(formula=as.formula(paste0("~", var, "+dummy._col", col, ".s.", subsetval)), design=design)
           if ("TRUE" %in% colnames(weighted)) {
