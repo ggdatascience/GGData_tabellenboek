@@ -318,7 +318,7 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
     
     if (indeling_rijen$type[i] %in% c("titel", "kop", "vraag", "tekst")) { # regel met een titel, kop, of tekst
       # een extra witregel voor koppen of titels
-      if (indeling_rijen$type[i] != "tekst") {
+      if (!indeling_rijen$type[i] %in% c("tekst", "vraag")) {
         if (i > 1)
           table.output = c(table.output, "<br />\r\n")
       }
