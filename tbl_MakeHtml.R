@@ -356,7 +356,6 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
                               NA.identical(results$year, col.design$year[j]) & NA.identical(results$crossing, col.design$crossing[j]) &
                               NA.identical(results$crossing.val, col.design$crossing.val[j]) & NA.identical(results$sign.vs, col.design$test.col[j])),] %>%
             as.data.frame() %>% group_by(var) %>% summarize(n=sum(n.unweighted, na.rm=T))
-          output[j] = max(n$n, na.rm=T)
         } else {
           # het maximale aantal per vraag is het aantal deelnemers
           # niet iedere vraag is volledig beantwoord, dus we nemen het hoogste getal
@@ -364,8 +363,12 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
                               NA.identical(results$year, col.design$year[j]) & NA.identical(results$crossing, col.design$crossing[j]) &
                               NA.identical(results$crossing.val, col.design$crossing.val[j]) & NA.identical(results$sign.vs, col.design$test.col[j])),] %>%
             as.data.frame() %>% group_by(var) %>% summarize(n=sum(n.unweighted, na.rm=T))
-          output[j] = max(n$n, na.rm=T)
         }
+        
+        # het is mogelijk dat er helemaal geen deelnemers zijn; dan willen we dat aangeven
+        if (nrow(n) == 0) max_n = Q_MISSING
+        else max_n = max(n$n, na.rm=T)
+        output[j] = max_n
       }    
 
       output = output %>% as.data.frame() %>% mutate(label="Aantal deelnemers", sign=NA, .before=1)
@@ -463,6 +466,10 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
             output[data.col$val[which(data.col$n.unweighted < algemeen$min_observaties_per_antwoord)],j] <- A_TOOSMALL
           }
         }
+        
+        # is de hele kolom leeg? dan mist er waarschijnlijk data
+        if (all(is.na(output[,j])))
+          output[is.na(output[,j]),j] = Q_MISSING
         
         # als er nu nog missende getallen zijn betekent dat dat er geen respondenten waren met dat antwoord
         output[is.na(output[,j]),j] = A_TOOSMALL

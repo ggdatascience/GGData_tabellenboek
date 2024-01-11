@@ -85,6 +85,11 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
   if (is.na(subset.name) || is.null(subset.name))
     subset.name = "Overzicht"
   
+  # Excel heeft een maximum voor de naam van een tabblad; afkorten?
+  if (str_length(subset.name) > 31) {
+    subset.name = paste0(str_sub(subset.name, end=27), "...")
+  }
+  
   wb = createWorkbook(creator="GGData Tabellenboek")
   addWorksheet(wb, subset.name)
   
@@ -204,7 +209,6 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
                               NA.identical(results$year, col.design$year[j]) & NA.identical(results$crossing, col.design$crossing[j]) &
                               NA.identical(results$crossing.val, col.design$crossing.val[j]) & NA.identical(results$sign.vs, col.design$test.col[j])),] %>%
             as.data.frame() %>% group_by(var) %>% summarize(n=sum(n.unweighted, na.rm=T))
-          output[j] = max(n$n, na.rm=T)
         } else {
           # het maximale aantal per vraag is het aantal deelnemers
           # niet iedere vraag is volledig beantwoord, dus we nemen het hoogste getal
@@ -212,8 +216,12 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
                               NA.identical(results$year, col.design$year[j]) & NA.identical(results$crossing, col.design$crossing[j]) &
                               NA.identical(results$crossing.val, col.design$crossing.val[j]) & NA.identical(results$sign.vs, col.design$test.col[j])),] %>%
             as.data.frame() %>% group_by(var) %>% summarize(n=sum(n.unweighted, na.rm=T))
-          output[j] = max(n$n, na.rm=T)
         }
+        
+        # het is mogelijk dat er helemaal geen deelnemers zijn; dan willen we dat aangeven
+        if (nrow(n) == 0) max_n = Q_MISSING
+        else max_n = max(n$n, na.rm=T)
+        output[j] = max_n
       }    
 
       # ruimte vrijhouden voor het later invoegen van headers
@@ -222,6 +230,19 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
       
       writeData(wb, subset.name, "aantallen", startCol=1, startRow=c, colNames=F)
       writeData(wb, subset.name, output, startCol=3, startRow=c, colNames=F)
+      
+      # missende waardes goed weergeven
+      missing = which(output == Q_MISSING | output == Q_TOOSMALL | output == A_TOOSMALL, arr.ind=T)
+      if (length(missing) > 0) {
+        # vanwege gekke R logica mag de waarde geen naam hebben (unname) en moet het gedwongen een matrix zijn
+        replacement = data.frame(row=missing[,1], col=missing[,2], val=matrix(unname(output[missing])))
+        
+        for (i in 1:nrow(replacement)) {
+          val = algemeen$tekst_missende_data
+          writeData(wb, subset.name, val, startCol=replacement$col[i]+2, startRow=c+replacement$row[i]-1, colNames=F)
+        }
+      }
+      
       addStyle(wb, subset.name, style.num, rows=c, cols=3:n.col.total, stack=T)
       data.rows = c(data.rows, c)
       
@@ -305,6 +326,10 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
             output[data.col$val[which(data.col$n.unweighted < algemeen$min_observaties_per_antwoord)],j] <- A_TOOSMALL
           }
         }
+        
+        # is de hele kolom leeg? dan mist er waarschijnlijk data
+        if (all(is.na(output[,j])))
+          output[is.na(output[,j]),j] = Q_MISSING
         
         # als er nu nog missende getallen zijn betekent dat dat er geen respondenten waren met dat antwoord
         output[is.na(output[,j]),j] = A_TOOSMALL
