@@ -825,7 +825,7 @@ log.save = T
     
     if (is.null(subsetmatches)) {
       # geen subsets, 1 tabellenboek
-      msg("Tabellenboek wordt gemaakt: Overzicht.html.", level=MSG)
+      msg("Digitoegankelijk tabellenboek wordt gemaakt: Overzicht.html.", level=MSG)
       MakeHtml(results, var_labels, kolom_opbouw, NA, NA, subsetmatches, template_html)
     } else {
       # wel subsets, meerdere tabellenboeken

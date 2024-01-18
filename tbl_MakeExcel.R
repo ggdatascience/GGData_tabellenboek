@@ -307,10 +307,10 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
         #PS:
         #Metingen die o.b.v te lage aantallen zijn vervangen 
         if (sum(data.var$n.unweighted[data.var$col.index == j], na.rm=T) == 0) {
-          output[vals,j] = Q_MISSING
+          output[,j] = Q_MISSING
         } else if (sum(data.var$n.unweighted[data.var$col.index == j], na.rm=T) < algemeen$min_observaties_per_vraag) {
           #Alle percentages wegstrepen als aantallen per groep te klein zijn.
-          output[vals,j] <- Q_TOOSMALL
+          output[,j] <- Q_TOOSMALL
         } else if(any(data.var$n.unweighted[data.var$col.index == j] < algemeen$min_observaties_per_antwoord, na.rm=T)) {
           # Bij een cel met te weinig antwoorden zijn er twee opties:
           # 1) De hele kolom verbergen, om herleidbaarheid te voorkomen.
@@ -318,7 +318,7 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
           # De keuze hierin is discutabel, dus we laten het over aan de onderzoekers zelf.
           if (algemeen$vraag_verbergen_bij_missend_antwoord) {
             #Alle percentages wegstrepen als tenminste 1 van de aantallen per antwoord te klein is.
-            output[vals,j] <- A_TOOSMALL
+            output[,j] <- A_TOOSMALL
           }
           else {
             # alleen de cel wegstrepen
@@ -340,7 +340,7 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
       
       # zijn er aparte wensen qua weergave van antwoordmogelijkheden?
       if (!is.na(indeling_rijen$waardes[i])) {
-        desired_answers = str_split(indeling_rijen$waardes[i], ",") %>% unlist() %>% str_trim()
+        desired_answers = str_split(indeling_rijen$waardes[i], fixed("|")) %>% unlist() %>% str_trim()
         output = output[desired_answers,]
       }
       
@@ -491,15 +491,24 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
       }
     }
     
+    # tekstopmaak is in te stellen in de configuratie -> [naam] en [jaar] worden vervangen
+    col.name = str_replace(str_replace(design("header_template"), fixed("[naam]"), col.name), fixed("[jaar]"), ifelse(!is.na(col.design$year[i]), col.design$year[i], ""))
+    
     # als er afkortingen zijn: deze toevoegen
+    # deze kunnen normale tekst zijn, of een reguliere expressie (aangegeven met beginteken *)
     if (nrow(headers_afkortingen) > 0) {
       for (j in 1:nrow(headers_afkortingen)) {
-        col.name = str_replace(col.name, fixed(headers_afkortingen$tekst[j]), headers_afkortingen$vervanging[j])
+        if (str_starts(headers_afkortingen$tekst[j], fixed("*"))) {
+          # reguliere expressie
+          col.name = str_replace(col.name, str_sub(headers_afkortingen$tekst[j], start=2), headers_afkortingen$vervanging[j])
+        } else {
+          # normale tekst
+          col.name = str_replace(col.name, fixed(headers_afkortingen$tekst[j]), headers_afkortingen$vervanging[j])
+        }
       }
     }
     
-    # tekstopmaak is in te stellen in de configuratie -> [naam] en [jaar] worden vervangen
-    output[header.col.nrows, i] = str_replace(str_replace(design("header_template"), fixed("[naam]"), col.name), fixed("[jaar]"), ifelse(!is.na(col.design$year[i]), col.design$year[i], ""))
+    output[header.col.nrows, i] = col.name
   }
   
   for (i in header.col.rows) {
