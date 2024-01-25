@@ -67,7 +67,19 @@ design = function (var) {
   
   # waarden omzetten waar nodig
   if (str_detect(var, "decoration")) {
-    # textDecoration moet NULL zijn indien niet gewenst; waardes opschonen
+    # binnen Excel is textDecoration één ding, binnen CSS zijn het twee aparte variabelen
+    # daarom moeten we hier even een smerig trucje uitvoeren
+    
+    if (ret == "bold") {
+      ret = "font-weight: bold; text-decoration: none; font-style: normal;"
+    } else if (ret == "underline") {
+      ret = "font-weight: normal; text-decoration: underline; font-style: normal;"
+    } else if (ret == "italic") {
+      ret = "font-weight: normal; text-decoration: none; font-style: italic;"
+    } else {
+      ret = ""
+    }
+    
     if (str_length(ret) <= 1) ret = NULL
   } else if (ret == "TRUE" || ret == "FALSE") {
     ret = ifelse(ret == "TRUE", T, F)
@@ -147,7 +159,7 @@ BuildHtmlTableRows = function (input, col.design) {
 # template = template_html
 # i = 7
 
-MakeHtml = function (results, var_labels, col.design, subset, subset.val, subsetmatches, template) {
+MakeHtml = function (results, var_labels, col.design, subset, subset.val, subsetmatches, n_resp, template) {
   subset.name = names(subset.val)
   subset.val = unname(subset.val)
   
@@ -359,24 +371,14 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
             subset.col = subsetmatches[subsetmatches[,1] == subset.val, col.design$subset[j]]
           }
           
-          n = results[which(NA.identical(results$dataset, col.design$dataset[j]) & NA.identical(results$subset, col.design$subset[j]) &
-                              NA.identical(results$subset.val, subset.col) & 
-                              NA.identical(results$year, col.design$year[j]) & NA.identical(results$crossing, col.design$crossing[j]) &
-                              NA.identical(results$crossing.val, col.design$crossing.val[j]) & NA.identical(results$sign.vs, col.design$test.col[j])),] %>%
-            as.data.frame() %>% group_by(var) %>% summarize(n=sum(n.unweighted, na.rm=T))
+          n = n_resp$n[which(n_resp$col == j & NA.identical(n_resp$year, col.design$year[j]) & NA.identical(n_resp$crossing, col.design$crossing[j]) & NA.identical(n_resp$subset, subset.col))]
         } else {
-          # het maximale aantal per vraag is het aantal deelnemers
-          # niet iedere vraag is volledig beantwoord, dus we nemen het hoogste getal
-          n = results[which(NA.identical(results$dataset, col.design$dataset[j]) & is.na(results$subset) & is.na(results$subset.val) &
-                              NA.identical(results$year, col.design$year[j]) & NA.identical(results$crossing, col.design$crossing[j]) &
-                              NA.identical(results$crossing.val, col.design$crossing.val[j]) & NA.identical(results$sign.vs, col.design$test.col[j])),] %>%
-            as.data.frame() %>% group_by(var) %>% summarize(n=sum(n.unweighted, na.rm=T))
+          n = n_resp$n[which(n_resp$col == j & NA.identical(n_resp$year, col.design$year[j]) & NA.identical(n_resp$crossing, col.design$crossing[j]) & is.na(n_resp$subset))]
         }
         
         # het is mogelijk dat er helemaal geen deelnemers zijn; dan willen we dat aangeven
-        if (nrow(n) == 0) max_n = Q_MISSING
-        else max_n = max(n$n, na.rm=T)
-        output[j] = max_n
+        if (length(n) == 0 || is.na(n) || n <= 0) n = Q_MISSING
+        output[j] = n
       }    
 
       output = output %>% as.data.frame() %>% mutate(label="Aantal deelnemers", sign=NA, .before=1)

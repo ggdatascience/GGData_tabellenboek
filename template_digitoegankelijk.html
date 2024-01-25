@@ -55,6 +55,7 @@
                 font-size: [titel_size];
                 color: [titel_color];
                 background-color: [titel_fill];
+                [titel_decoration]
                 padding: 3px;
             }
 
@@ -62,6 +63,7 @@
                 font-size: [kop_size];
                 color: [kop_color];
                 background-color: [kop_fill];
+                [kop_decoration]
                 padding: 3px;
             }
 
@@ -69,6 +71,7 @@
                 font-size: [vraag_size];
                 color: [vraag_color];
                 background-color: [vraag_fill];
+                [vraag_decoration];
             }
 
             .sign {
@@ -98,6 +101,10 @@
             function menu () {
                 headers = document.getElementsByClassName("heading");
                 select = document.getElementById("menu_dropdown");
+
+                el = document.createElement("option");
+                el.innerText = "Kies een onderdeel...";
+                select.appendChild(el);
 
                 for (i = 0; i < headers.length; i++) {
                     header = headers[i];

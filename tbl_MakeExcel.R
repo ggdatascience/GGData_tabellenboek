@@ -78,7 +78,7 @@ design = function (var) {
 # subset.name = "Aalten"
 # i = 7
 
-MakeExcel = function (results, var_labels, col.design, subset, subset.val, subsetmatches) {
+MakeExcel = function (results, var_labels, col.design, subset, subset.val, subsetmatches, n_resp) {
   subset.name = names(subset.val)
   subset.val = unname(subset.val)
   
@@ -204,24 +204,14 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
             subset.col = subsetmatches[subsetmatches[,1] == subset.val, col.design$subset[j]]
           }
           
-          n = results[which(NA.identical(results$dataset, col.design$dataset[j]) & NA.identical(results$subset, col.design$subset[j]) &
-                              NA.identical(results$subset.val, subset.col) & 
-                              NA.identical(results$year, col.design$year[j]) & NA.identical(results$crossing, col.design$crossing[j]) &
-                              NA.identical(results$crossing.val, col.design$crossing.val[j]) & NA.identical(results$sign.vs, col.design$test.col[j])),] %>%
-            as.data.frame() %>% group_by(var) %>% summarize(n=sum(n.unweighted, na.rm=T))
+          n = n_resp$n[which(n_resp$col == j & NA.identical(n_resp$year, col.design$year[j]) & NA.identical(n_resp$crossing, col.design$crossing[j]) & NA.identical(n_resp$subset, subset.col))]
         } else {
-          # het maximale aantal per vraag is het aantal deelnemers
-          # niet iedere vraag is volledig beantwoord, dus we nemen het hoogste getal
-          n = results[which(NA.identical(results$dataset, col.design$dataset[j]) & is.na(results$subset) & is.na(results$subset.val) &
-                              NA.identical(results$year, col.design$year[j]) & NA.identical(results$crossing, col.design$crossing[j]) &
-                              NA.identical(results$crossing.val, col.design$crossing.val[j]) & NA.identical(results$sign.vs, col.design$test.col[j])),] %>%
-            as.data.frame() %>% group_by(var) %>% summarize(n=sum(n.unweighted, na.rm=T))
+          n = n_resp$n[which(n_resp$col == j & NA.identical(n_resp$year, col.design$year[j]) & NA.identical(n_resp$crossing, col.design$crossing[j]) & is.na(n_resp$subset))]
         }
         
         # het is mogelijk dat er helemaal geen deelnemers zijn; dan willen we dat aangeven
-        if (nrow(n) == 0) max_n = Q_MISSING
-        else max_n = max(n$n, na.rm=T)
-        output[j] = max_n
+        if (length(n) == 0 || is.na(n) || n <= 0) n = Q_MISSING
+        output[j] = n
       }    
 
       # ruimte vrijhouden voor het later invoegen van headers

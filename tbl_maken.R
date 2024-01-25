@@ -473,8 +473,8 @@ log.save = T
   
   # dummyvariabelen maken voor iedere kolom
   # dit is nodig om later een chi square uit te kunnen voeren over een vergelijkingsset, omdat survey pure pijn is
-  #kolom_opbouw = kolom_opbouw %>% group_by(dataset, subset, year)
-  #subsets = group_keys(kolom_opbouw)
+  # daarnaast maken we van het moment gebruik om de aantallen even op te slaan
+  n_resp = data.frame()
   for (i in 1:nrow(kolom_opbouw)) {
     kolom = data$tbl_dataset == kolom_opbouw$dataset[i]
     # scheiden per jaar?
@@ -488,6 +488,8 @@ log.save = T
     
     data[,paste0("dummy._col", i)] = kolom
     
+    n_resp = bind_rows(n_resp, data.frame(col=i, year=kolom_opbouw$year[i], crossing=kolom_opbouw$crossing[i], n=sum(kolom, na.rm=T)))
+    
     # ook splitsen per subset?
     if (!is.na(kolom_opbouw$subset[i])) {
       subsetvals = val_labels(data[[kolom_opbouw$subset[i]]])
@@ -496,6 +498,8 @@ log.save = T
         subset = kolom & data[[kolom_opbouw$subset[i]]] == val
         if (sum(subset, na.rm=T) <= 0) next # als er geen data bestaat voor die subset is het een beetje nutteloos
         data[,paste0("dummy._col", i, ".s.", unname(val))] = subset
+        
+        n_resp = bind_rows(n_resp, data.frame(col=i, year=kolom_opbouw$year[i], crossing=kolom_opbouw$crossing[i], subset=val, n=sum(subset, na.rm=T)))
       }
     }
   }
@@ -835,7 +839,7 @@ log.save = T
           next # geen data gevonden voor deze subset, overslaan
         
         msg("Digitoegankelijk tabellenboek voor %s wordt gemaakt.", names(subsetvals[s]), level=MSG)
-        MakeHtml(results, var_labels, kolom_opbouw, colnames(subsetmatches)[1], subsetvals[s], subsetmatches, template_html)
+        MakeHtml(results, var_labels, kolom_opbouw, colnames(subsetmatches)[1], subsetvals[s], subsetmatches, n_resp, template_html)
       }
     }
   }
@@ -854,7 +858,7 @@ log.save = T
         next # geen data gevonden voor deze subset, overslaan
       
       msg("Tabellenboek voor %s wordt gemaakt.", names(subsetvals[s]), level=MSG)
-      MakeExcel(results, var_labels, kolom_opbouw, colnames(subsetmatches)[1], subsetvals[s], subsetmatches)
+      MakeExcel(results, var_labels, kolom_opbouw, colnames(subsetmatches)[1], subsetvals[s], subsetmatches, n_resp)
     }
   }
 }
