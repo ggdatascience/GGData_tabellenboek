@@ -86,6 +86,7 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
     subset.name = "Overzicht"
   
   # Excel heeft een maximum voor de naam van een tabblad; afkorten?
+  subset.name.full = subset.name
   if (str_length(subset.name) > 31) {
     subset.name = paste0(str_sub(subset.name, end=27), "...")
   }
@@ -135,7 +136,7 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
   # moet er introtekst bij?
   if (nrow(intro_tekst) > 0) {
     intro_tekst$type = str_to_lower(str_trim(intro_tekst$type))
-    intro_tekst$inhoud = str_replace_all(intro_tekst$inhoud, fixed("[naam]"), subset.name)
+    intro_tekst$inhoud = str_replace_all(intro_tekst$inhoud, fixed("[naam]"), subset.name.full)
     for (i in 1:nrow(intro_tekst)) {
       output = data.frame(a=intro_tekst$type[i], b=intro_tekst$inhoud[i])
       writeData(wb, subset.name, output, startCol=1, startRow=c, colNames=F)
@@ -170,7 +171,7 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
           c = c + 1
       }
       
-      output = data.frame(a=indeling_rijen$type[i], b=str_replace_all(indeling_rijen$inhoud[i], "naam_onderdeel", subset.name))
+      output = data.frame(a=indeling_rijen$type[i], b=str_replace_all(indeling_rijen$inhoud[i], "naam_onderdeel", subset.name.full))
       writeData(wb, subset.name, output, startCol=1, startRow=c, colNames=F)
       
       # TODO: meer opmaak?
@@ -579,8 +580,8 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
   
   # en als laatste... opslaan!
   tryCatch({
-    saveWorkbook(wb, sprintf("output/%s.xlsx", subset.name), overwrite=T)
-    msg("Tabellenboek voor %s opgeslagen.", subset.name, level=MSG)
+    saveWorkbook(wb, sprintf("output/%s.xlsx", subset.name.full), overwrite=T)
+    msg("Tabellenboek voor %s opgeslagen.", subset.name.full, level=MSG)
   },
   error = function(e){
     msg("Er is een fout opgetreden bij het maken van het Excelbestand: %s", e, level=MSG)

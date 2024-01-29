@@ -830,7 +830,7 @@ log.save = T
     if (is.null(subsetmatches)) {
       # geen subsets, 1 tabellenboek
       msg("Digitoegankelijk tabellenboek wordt gemaakt: Overzicht.html.", level=MSG)
-      MakeHtml(results, var_labels, kolom_opbouw, NA, NA, subsetmatches, template_html)
+      MakeHtml(results, var_labels, kolom_opbouw, NA, NA, subsetmatches, n_resp, template_html)
     } else {
       # wel subsets, meerdere tabellenboeken
       subsetvals = subsetmatches[,1]
@@ -849,7 +849,7 @@ log.save = T
   if (is.null(subsetmatches)) {
     # geen subsets, 1 tabellenboek
     msg("Tabellenboek wordt gemaakt: Overzicht.xlsx.", level=MSG)
-    MakeExcel(results, var_labels, kolom_opbouw, NA, NA, subsetmatches)
+    MakeExcel(results, var_labels, kolom_opbouw, NA, NA, subsetmatches, n_resp)
   } else {
     # wel subsets, meerdere tabellenboeken
     subsetvals = subsetmatches[,1]
