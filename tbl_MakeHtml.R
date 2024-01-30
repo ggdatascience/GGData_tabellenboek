@@ -170,30 +170,10 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
   template = str_replace_all(template, fixed("{titel}"), subset.name)
   
   # opmaak
-  # TODO: font-weight: bold en font-decoration: underline etc. toevoegen
   design.vars = str_extract_all(template, "\\[[a-zA-Z_]{3,}\\]") %>% unlist() %>% str_sub(start=2, end=-2)
   for (var in design.vars) {
     template = str_replace_all(template, fixed(paste0("[", var, "]")), design(var))
   }
-  
-  # modifyBaseFont(wb, fontSize=design("font_size"), fontColour=design("font_color"), fontName=design("font_type"))
-  # 
-  # style.sign = createStyle(textDecoration="bold") # significante resultaten
-  # style.title = createStyle(fontSize=design("titel_size"), fontColour=design("titel_color"),
-  #                           textDecoration=design("titel_decoration"), fgFill=design("titel_fill")) # titels
-  # style.subtitle = createStyle(fontSize=design("kop_size"), fontColour=design("kop_color"),
-  #                              textDecoration=design("kop_decoration"), fgFill=design("kop_fill")) # koppen
-  # style.question = createStyle(fontSize=design("vraag_size"), fontColour=design("vraag_color"),
-  #                              textDecoration=design("vraag_decoration"), fgFill=design("vraag_fill")) # vragen/variabelen/indicatoren
-  # style.text = createStyle(wrapText=T, valign="center")
-  # style.header.col = createStyle(halign="center", valign="center", textDecoration="bold") # kolomkoppen
-  # style.header.col.crossing = createStyle(halign="center", valign="center") # kolomkoppen crossings
-  # style.perc = createStyle(halign="center", valign="center") # percentagetekens
-  # style.num = createStyle(numFmt="0", halign="center", valign="center") # cijfers -> 0 betekent hele getallen zonder decimalen, 0.0 -> 1 decimaal, etc.
-  # style.gray.bg = createStyle(fgFill = "#F2F2F2") # voor afwisselende kolommen/rijen
-  # style.intro.text = createStyle(wrapText=F)
-  # style.intro.header = createStyle(wrapText=F, fontSize=design("kop_size"), textDecoration=design("kop_decoration"))
-  # style.intro.title = createStyle(wrapText=F, fontSize=design("titel_size") + 4, textDecoration=design("titel_decoration"))
   
   # instellingen
   header.col.nrows = ifelse(design("header_stijl") == "dubbel", 2, 1) # aantal rijen per kolomheader
@@ -314,6 +294,41 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
     if (!is.na(intro_tekst$inhoud[nrow(intro_tekst)])) intro_tekst = bind_rows(intro_tekst, data.frame(type="tekst", inhoud="<br />"))
     
     template = str_replace(template, fixed("{introtekst}"), str_c(intro_tekst$inhoud, collapse="<br />\n"))
+  } else {
+    # anders is het ook zo jammer...
+    template = str_replace(template, fixed("{introtekst}"), "")
+  }
+  
+  # plaatjes toevoegen?
+  if (nrow(logos) > 0) {
+    img = c()
+    
+    for (i in 1:nrow(logos)) {
+      # rij = logos$rij[i]
+      # kolom = logos$kolom[i]
+      # # bij negatieve waarden doen we aantal - waarde
+      # if (rij < 0) {
+      #   rij = c - abs(rij)
+      # }
+      # if (kolom < 0) {
+      #   kolom = n.col.total - abs(kolom) + 1
+      # }
+      # 
+      # insertImage(wb, subset.name, file=logos$bestand[i], width=logos$breedte[i], height=logos$hoogte[i], units="px",
+      #             startRow=rij, startCol=kolom)
+      
+      base_img = sprintf("<img src=\"%s\" %s width=\"%d\" height=\"%d\">",
+                         image_uri(logos$bestand[i]),
+                         ifelse(!is.na(logos$id[i]), paste0("id=\"logo_", logos$id[i], "\"")),
+                         logos$breedte[i], logos$hoogte[i])
+      
+      if ("id" %in% colnames(logos) && !is.na(logos$id[i]) && str_detect(template, fixed(sprintf("{logo %s}", logos$id[i])))) {
+        template = str_replace(template, fixed(sprintf("{logo %s}", logos$id[i])), base_img)
+      }
+      img = c(img, base_img)
+    }
+    
+    template = str_replace(template, fixed("{logo}"), str_c(img, collapse="\n\n"))
   }
   
   indeling_rijen$type = str_to_lower(str_trim(indeling_rijen$type))

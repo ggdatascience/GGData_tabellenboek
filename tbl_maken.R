@@ -112,8 +112,11 @@ log.save = T
   }
   
   # bestaat het templatebestand voor digitoegankelijkheid? (indien gewenst)
-  if (!is.na(algemeen$template_html) && !file.exists(algemeen$template_html)) {
-    msg("Het templatebestand voor digitoegankelijke tabellenboeken is niet gevonden. Controleer de configuratie: tabblad algemeen, kolom template_html.", algemeen$template_html, level=ERR)
+  if (!is.na(algemeen$template_html)) {
+    # in de configuratie mag {script}/ staan, deze vervangen door pad van het script
+    algemeen$template_html = str_replace(algemeen$template_html, fixed("{script}"), dirname(this.path()))
+    if (!file.exists(algemeen$template_html))
+      msg("Het templatebestand voor digitoegankelijke tabellenboeken is niet gevonden. Controleer de configuratie: tabblad algemeen, kolom template_html.", algemeen$template_html, level=ERR)
   }
   
   # sanity checks op indeling_rijen
@@ -502,6 +505,10 @@ log.save = T
         n_resp = bind_rows(n_resp, data.frame(col=i, year=kolom_opbouw$year[i], crossing=kolom_opbouw$crossing[i], subset=val, n=sum(subset, na.rm=T)))
       }
     }
+  }
+  # het kan voorkomen dat geen van de kolommen een subset hebben, maar hier wordt in latere functies wel gebruik van gemaakt... indien missend, voeg toe
+  if (!"subset" %in% colnames(n_resp)) {
+    n_resp$subset = NA
   }
   
   ##### begin berekeningen
