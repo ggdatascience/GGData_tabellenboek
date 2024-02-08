@@ -108,7 +108,7 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
           cols = col.design$col.index[group_rows(col.design)[[i]]]
           
           if (!all(paste0("dummy._col", cols, ".s.", subsetval) %in% names(design$variables))) {
-            msg("Er is geen data beschikbaar voor kolom %d bij dataset %d, subset %s, jaar %s, crossing %s, selectie %s.",
+            msg("Er is geen data beschikbaar voor kolom %s bij dataset %d, subset %s, jaar %s, crossing %s, selectie %s.",
                 str_c(cols[!(paste0("dummy._col", cols, ".s.", subsetval) %in% names(design$variables))], collapse=", "),
                 colgroups$dataset[i], colgroups$subset[i], colgroups$year[i], colgroups$crossing[i], subsetval, level=WARN)
             next
