@@ -15,8 +15,15 @@ suppressPackageStartupMessages(library(tidyverse))
 library(openxlsx)
 library(this.path)
 
-setwd(dirname(this.path()))
 source("tbl_helpers.R")
+# niveau van weergave van meldingen
+# mogelijke waarden: ERR / WARN / MSG / DEBUG, waarbij een hoger niveau melding altijd weergegeven wordt
+# als het level op MSG staat en er zou een WARN worden weergegeven is deze dus zichtbaar (maar andersom niet)
+# in het dagelijks gebruik is MSG ruim voldoende, zet DEBUG alleen aan bij het doorgeven van foutmeldingen aan de werkgroep
+setwd(dirname(this.path()))
+log.level = DEBUG
+# log opslaan naar een tekstbestand?
+log.save = T
 
 {
   config.file = choose.files(caption="Selecteer configuratiebestand...",
