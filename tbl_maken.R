@@ -13,7 +13,7 @@ rm(list=ls())
 
 # benodigde packages installeren als deze afwezig zijn
 pkg_nodig = c("tidyverse", "survey", "haven", "this.path",
-              "labelled", "openxlsx", "doParallel", "foreach")
+              "labelled", "openxlsx", "doParallel", "foreach", "knitr")
 
 for (pkg in pkg_nodig) {
   if (system.file(package = pkg) == "") {
@@ -29,6 +29,7 @@ library(labelled)
 library(openxlsx)
 suppressPackageStartupMessages(library(doParallel))
 library(foreach)
+library(knitr)
 
 # instellen werkmap voor het laden van de andere bestanden
 setwd(dirname(this.path()))
