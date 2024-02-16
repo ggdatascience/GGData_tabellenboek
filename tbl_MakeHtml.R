@@ -317,9 +317,9 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
       # insertImage(wb, subset.name, file=logos$bestand[i], width=logos$breedte[i], height=logos$hoogte[i], units="px",
       #             startRow=rij, startCol=kolom)
       
-      base_img = sprintf("<img src=\"%s\" %s width=\"%d\" height=\"%d\">",
+      base_img = sprintf("<img src=\"%s\"%s width=\"%d\" height=\"%d\">",
                          image_uri(logos$bestand[i]),
-                         ifelse(!is.na(logos$id[i]), paste0("id=\"logo_", logos$id[i], "\"")),
+                         ifelse(!is.na(logos$id[i]), paste0(" id=\"logo_", logos$id[i], "\""), ""),
                          logos$breedte[i], logos$hoogte[i])
       
       if ("id" %in% colnames(logos) && !is.na(logos$id[i]) && str_detect(template, fixed(sprintf("{logo %s}", logos$id[i])))) {

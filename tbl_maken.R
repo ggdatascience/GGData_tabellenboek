@@ -461,6 +461,8 @@ log.save = T
     } else if (!is.na(onderdelen$sign_totaal[i])) {
       msg("Let op! Onderdeel %d (dataset %s, subset %s)  heeft een ongeldige waarde in de kolom sign_totaal. Hier is alleen een getal, de naam van een dataset, of een lege cel toegestaan.",
           i, onderdelen$dataset[i], onderdelen$subset[i], level=ERR)
+    } else {
+      test.col = NA
     }
     
     kolom_opbouw = bind_rows(kolom_opbouw, data.frame(col.index=nrow(kolom_opbouw)+1, dataset=d, subset=onderdelen$subset[i], year=onderdelen$jaar[i],
