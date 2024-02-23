@@ -488,7 +488,7 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
           else {
             # alleen de cel wegstrepen
             data.col = data.var[data.var$col.index == j & data.var$val %in% rownames(output),]
-            output[data.col$val[which(data.col$n.unweighted < algemeen$min_observaties_per_antwoord)],j] <- A_TOOSMALL
+            output[rownames(output) %in% data.col$val[which(data.col$n.unweighted < algemeen$min_observaties_per_antwoord)],j] <- A_TOOSMALL
           }
         }
         
