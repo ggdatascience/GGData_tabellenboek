@@ -455,6 +455,11 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
   addStyle(wb, subset.name, createStyle(wrapText=T), rows=table.start:c, cols=1:n.col.total, gridExpand=T, stack=T)
   addStyle(wb, subset.name, createStyle(fgFill="#ffffff"), rows=which(!1:c %in% title.rows), cols=1:n.col.total, gridExpand=T, stack=T)
   
+  # cellen met koppen/titels/vragen samenvoegen, zodat de tekst de gehele breedte kan gebruiken
+  for (i in title.rows) {
+    mergeCells(wb, subset.name, cols=1:n.col.total, rows=i)
+  }
+  
   # headers toevoegen
   # deze kunnen 1 of 2 regels beslaan:
   # <dataset>                   | <dataset 2>    vs.   kolom 1 | kolom 2 | totaal <dataset> | totaal <dataset 2> 
