@@ -99,17 +99,18 @@ BuildHtmlTableRows = function (input, col.design) {
   
   output = ""
   for (i in 1:nrow(input)) {
-    htmlclass = c()
+    htmlclass = ""
     if (design("rijen_afwisselend_kleuren")) {
       if (i %% 2 == 0)
-        htmlclass = c("rij_b")
+        htmlclass = " class=\"rij_b\""
       else
-        htmlclass = c("rij_a")
+        htmlclass = " class=\"rij_a\""
     }
     
     output = paste0(output, sprintf('<tr%s><th scope="row">%s</th>', htmlclass, input$label[i]))
     for (c in 1:(ncol(input) - 2)) {
       val = input[i, c+2]
+      htmlclass = c()
       
       if (val == A_TOOSMALL) {
         val = algemeen$tekst_min_antwoord_niet_gehaald

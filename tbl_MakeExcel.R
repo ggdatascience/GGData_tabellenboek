@@ -457,7 +457,7 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
   
   # cellen met koppen/titels/vragen samenvoegen, zodat de tekst de gehele breedte kan gebruiken
   for (i in title.rows) {
-    mergeCells(wb, subset.name, cols=1:n.col.total, rows=i)
+    mergeCells(wb, subset.name, cols=2:n.col.total, rows=i)
   }
   
   # headers toevoegen
