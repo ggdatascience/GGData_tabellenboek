@@ -335,7 +335,8 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
         output = output[desired_answers,]
       }
       
-      sign$rij = sapply(sign$val, function (v) which(rownames(output) == v))
+      sign$rij = sapply(sign$val, function (v) ifelse(v %in% rownames(output), which(rownames(output) == v), NA))
+      sign = sign[!is.na(sign$rij),]
       
       # dichotoom? zo ja, alleen 1 (= ja) laten zien en geen kop met de vraag
       # zo nee, kop met de vraag en alle waardes laten zien
