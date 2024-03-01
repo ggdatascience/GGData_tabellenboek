@@ -373,7 +373,7 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
         question.cache = output
         output = sprintf("<h3 class=\"heading vraag\" id=\"heading_%d\">%s</h3>", i, output)
       } else { # tekst
-        output = sprintf("%s<br />", output)
+        output = sprintf("%s<br />", ifelse(is.na(output), "", output))
       }
       
       table.output = c(table.output, paste0(output, "\r\n"))
