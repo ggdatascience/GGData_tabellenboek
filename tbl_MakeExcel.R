@@ -332,6 +332,9 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
       # zijn er aparte wensen qua weergave van antwoordmogelijkheden?
       if (!is.na(indeling_rijen$waardes[i])) {
         desired_answers = str_split(indeling_rijen$waardes[i], fixed("|")) %>% unlist() %>% str_trim()
+        # wanneer er slechts 1 rij geselecteerd wordt verandert de matrix in een lijst, waardoor alles explodeert
+        # oplossing: maak er een data.frame van
+        output = as.data.frame(output)
         output = output[desired_answers,]
       }
       
