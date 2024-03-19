@@ -90,7 +90,7 @@ design = function (var) {
   return(ret)
 }
 
-BuildHtmlTableRows = function (input, col.design) {
+BuildHtmlTableRows = function (input, col.design, n=F) {
   # input is als het goed is een data.frame met twee datakolommen (label en sign), en dan een reeks waarden
   # gewenste output is opgemaakte rijen met significantie aangegeven
   
@@ -122,7 +122,7 @@ BuildHtmlTableRows = function (input, col.design) {
         val = algemeen$tekst_missende_data
         htmlclass = c(htmlclass, "data_missend")
       } else {
-        val = sprintf("%.0f", val)
+        val = sprintf("%s%.0f", ifelse(n, "n=", ""), val)
         if (c %in% unlist(input$sign[i])) {
           htmlclass = c(htmlclass, "sign")
         }
@@ -143,6 +143,10 @@ BuildHtmlTableRows = function (input, col.design) {
       
       # klassen toevoegen aan de opmaak
       htmlclass = ifelse(length(htmlclass) > 0, sprintf(' class="%s"', str_c(htmlclass, collapse=" ")), "")
+      # significant?
+      if (c %in% unlist(input$sign[i])) {
+        htmlclass = paste0(htmlclass, " title=\"", algemeen$sign_hovertekst, "\"")
+      }
       
       output = paste0(output, sprintf("<td%s>%s</td>", htmlclass, val))
     }
@@ -336,19 +340,22 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
   # er is een tijdelijke opslag nodig voor niet-dichotome variabelen die achter elkaar moeten
   table.cache = NULL # hier is NULL nodig i.p.v. NA, omdat is.na() een vector teruggeeft, en we willen alleen weten of de variabele gevuld is of niet
   question.cache = NA
+  n.cache = NULL
   for (i in 1:nrow(indeling_rijen)) {
-    # als er iets in de tijdelijke opslag zit en de huidige regel != "var", printen
-    if (!is.null(table.cache) && indeling_rijen$type[i] != "var") {
+    # als er iets in de tijdelijke opslag zit en de huidige regel != "var" of "nvar", printen
+    if (!is.null(table.cache) && !indeling_rijen$type[i] %in% c("var", "nvar")) {
       table.output = c(table.output, paste0("<table>\r\n",
                                             "<caption>", question.cache, "</caption>\r\n",
                                             header.output, "\r\n",
                                             perc.row.output,
+                                            ifelse(!is.null(n.cache), BuildHtmlTableRows(n.cache, col.design, T), ""),
                                             "<tbody>\r\n",
                                             BuildHtmlTableRows(table.cache, col.design),
                                             "</tbody>\r\n",
                                             "</table>\r\n<br />\r\n"))
       question.cache = NA
       table.cache = NULL
+      n.cache = NULL
     }
     
     if (indeling_rijen$type[i] %in% c("titel", "kop", "vraag", "tekst")) { # regel met een titel, kop, of tekst
@@ -405,7 +412,7 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
                                             BuildHtmlTableRows(output, col.design),
                                             "</tbody>\r\n",
                                             "</table><br />\r\n"))
-    } else if (indeling_rijen$type[i] == "var") { # variabele toevoegen
+    } else if (indeling_rijen$type[i] == "var" || indeling_rijen$type[i] == "nvar") { # variabele toevoegen
       if (!indeling_rijen$inhoud[i] %in% colnames(data)) {
         msg("Variabele %s komt niet voor in de resultaten. Deze wordt overgeslagen. Controleer de configuratie.", indeling_rijen$inhoud[i], level=WARN)
         next
@@ -448,6 +455,16 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
           data.var = bind_rows(data.var, data.tmp)
         }
       }
+      
+      # aantal respondenten per vraag ophalen
+      n_var = data.var %>%
+        group_by(col.index) %>%
+        summarize(n=sum(n.unweighted, na.rm=T)) %>%
+        arrange(col.index) %>%
+        column_to_rownames("col.index") %>%
+        t() %>%
+        as.data.frame() %>%
+        mutate(label="Aantal respondenten", sign=NA, .before=1)
       
       # voor het schrijven naar Excel is een matrix met getallen makkelijker
       # het kan voorkomen dat niet alle antwoordmogelijkheden in elke subset aanwezig zijn
@@ -534,10 +551,22 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
           mutate(label=var_labels$label[var_labels$var == indeling_rijen$inhoud[i] & var_labels$val == "var"], .after=val) %>%
           select(-val)
         
+        if (indeling_rijen$type[i] != "nvar") {
+          # aantal hoeft niet in de cache als dit geen nvar is; NULL maken
+          n_var = NULL
+        }
+        
         if (!is.null(table.cache)) {
           table.cache = bind_rows(table.cache, output)
+          if (is.null(n.cache)) {
+            msg("Let op! De variabele %s op rij %d heeft als type 'nvar', maar dit betreft een dichotome variabele in een lijst. Alleen het aantal respondenten van de eerste variabele wordt weergegeven.",
+                indeling_rijen$inhoud[i], i, level=WARN)
+          } else {
+            n.cache = n_var
+          }
         } else {
           table.cache = output
+          n.cache = n_var
         }
       } else { # niet dichotoom
         output = output %>%
@@ -549,21 +578,25 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
                                                 "<caption>", question.cache, "</caption>\r\n",
                                                 header.output, "\r\n",
                                                 perc.row.output,
+                                                ifelse(!is.null(n.cache), BuildHtmlTableRows(n.cache, col.design, T), ""),
                                                 "<tbody>\r\n",
                                                 BuildHtmlTableRows(table.cache, col.design),
                                                 "</tbody>\r\n",
                                                 "</table>\r\n<br />\r\n"))
           question.cache = NA
           table.cache = NULL
+          n.cache = NULL
         }
         
         # tabel invoegen
+        #browser()
         table.output = c(table.output, paste0("<h3 class=\"vraag\">", var_labels$label[var_labels$var == indeling_rijen$inhoud[i] & var_labels$val == "var"], "</h3>",
                                               "<table>\r\n",
                                               # titel van de vraag toevoegen
                                               "<caption>", var_labels$label[var_labels$var == indeling_rijen$inhoud[i] & var_labels$val == "var"], "</caption>\r\n",
-                                              ifelse(is.na(indeling_rijen$kolomkoppen[i]), header.output, ""), "\r\n", # kolomkoppen alleen indien gewenst
+                                              header.output, "\r\n",
                                               perc.row.output,
+                                              ifelse(indeling_rijen$type[i] == "nvar", BuildHtmlTableRows(n_var, col.design, T), ""),
                                               "<tbody>\r\n",
                                               BuildHtmlTableRows(output, col.design),
                                               "</tbody>\r\n",
@@ -583,6 +616,7 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
     table.output = c(table.output, paste0("<table>\r\n",
                                           "<caption>", question.cache, "</caption>\r\n",
                                           header.output, "\r\n",
+                                          ifelse(!is.null(n.cache), BuildHtmlTableRows(n.cache, col.design), ""),
                                           perc.row.output,
                                           "<tbody>\r\n",
                                           BuildHtmlTableRows(table.cache, col.design),

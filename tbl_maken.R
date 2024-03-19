@@ -121,9 +121,9 @@ log.save = T
   }
   
   # sanity checks op indeling_rijen
-  if (any(is.na(indeling_rijen$type)) || any(!indeling_rijen$type %in% c("aantallen", "var", "titel", "kop", "vraag", "tekst"))) {
-    msg("Ongeldige waardes aangetroffen in de kolom type van tabblad indeling_rijen. Het betreft rij(en) %s. Geldige waardes zijn 'aantallen', 'var', 'titel', 'kop', 'vraag', of 'tekst'.",
-        str_c(which(is.na(indeling_rijen$type) | !indeling_rijen$type %in% c("aantallen", "var", "titel", "kop", "vraag", "tekst")), collapse=", "), level=ERR)
+  if (any(is.na(indeling_rijen$type)) || any(!indeling_rijen$type %in% c("aantallen", "var", "nvar", "titel", "kop", "vraag", "tekst"))) {
+    msg("Ongeldige waardes aangetroffen in de kolom type van tabblad indeling_rijen. Het betreft rij(en) %s. Geldige waardes zijn 'aantallen', 'var', 'nvar', 'titel', 'kop', 'vraag', of 'tekst'.",
+        str_c(which(is.na(indeling_rijen$type) | !indeling_rijen$type %in% c("aantallen", "var", "nvar", "titel", "kop", "vraag", "tekst")), collapse=", "), level=ERR)
   }
   
   # latere toevoeging: mogelijkheid om kolomkoppen aan en uit te zetten per variabele/kop
@@ -138,6 +138,12 @@ log.save = T
   if (!"waardes" %in% colnames(indeling_rijen)) {
     indeling_rijen$waardes = rep(NA, nrow(indeling_rijen))
     msg("Er is geen kolom met de naam 'waardes' aanwezig in indeling_rijen. Standaardinstelling (alle antwoorden in oplopende volgorde) wordt aangenomen.", level=WARN)
+  }
+  
+  # hovertekst bij significantie is ook later toegevoegd
+  if (!"sign_hovertekst" %in% colnames(algemeen)) {
+    algemeen$sign_hovertekst = "Deze waarde is significant anders."
+    msg("Er is geen kolom met de naam 'sign_hovertekst' aanwezig in algemeen. Standaardinstelling (\"Deze waarde is significant anders.\") wordt aangenomen.", level=WARN)
   }
   
   # variabelelijst afleiden uit de indeling van het tabellenboek;
@@ -572,8 +578,8 @@ log.save = T
     varlist.prev = read.csv(sprintf("resultaten_csv/vars_%s.csv", basename(config.file)), fileEncoding="UTF-8")
     
     # kolomkoppen en waardes mogen verschillen tussen varlist en varlist.prev, dus we maken een 'vergelijkingsset' zonder die kolommen
-    varlist.cmp = varlist %>% select(type, inhoud, starts_with("weeg"))
-    varlist.prev.cmp = varlist.prev %>% select(type, inhoud, starts_with("weeg"))
+    varlist.cmp = varlist %>% select(inhoud, starts_with("weeg"))
+    varlist.prev.cmp = varlist.prev %>% select(inhoud, starts_with("weeg"))
     
     if (identical.enough(kolom_opbouw, kolom_opbouw.prev) && identical.enough(varlist.cmp, varlist.prev.cmp)) {
       msg("Eerdere resultaten aangetroffen vanuit deze configuratie (%s). Berekening wordt overgeslagen. Indien er nieuwe data is toegevoegd, verwijder dan de bestanden uit de map resultaten_csv.",

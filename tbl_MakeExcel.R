@@ -186,9 +186,15 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
         addStyle(wb, subset.name, style.question, rows=c, cols=1:n.col.total, stack=T)
         title.rows = c(title.rows, c)
         # kolomkoppen toevoegen?
-        if (!is.na(indeling_rijen$kolomkoppen[i])) {
+        if (is.na(indeling_rijen$kolomkoppen[i])) {
           header.col.rows = c(header.col.rows, c+1)
           c = c + header.col.nrows
+          
+          # we moeten hier c+1 doen, omdat c nog niet bijgewerkt is na het toevoegen van de vraag
+          writeData(wb, subset.name, t(rep("%", n.col)), startCol=3, startRow=c+1, colNames=F)
+          addStyle(wb, subset.name, style.perc, cols=3:n.col.total, rows=c+1, gridExpand=T, stack=T)
+          perc.rows = c(perc.rows, c+1)
+          c = c + 1
         }
       } else { # tekst
         addStyle(wb, subset.name, style.text, rows=c, cols=1:n.col.total, stack=T)
@@ -238,7 +244,7 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
       data.rows = c(data.rows, c)
       
       c = c + 1
-    } else if (indeling_rijen$type[i] == "var") { # variabele toevoegen
+    } else if (indeling_rijen$type[i] == "var" || indeling_rijen$type[i] == "nvar") { # variabele toevoegen
       if (!indeling_rijen$inhoud[i] %in% colnames(data)) {
         msg("Variabele %s komt niet voor in de resultaten. Deze wordt overgeslagen. Controleer de configuratie.", indeling_rijen$inhoud[i], level=WARN)
         next
@@ -274,6 +280,18 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
           data.var = bind_rows(data.var, data.tmp)
         }
       }
+      
+      n_var = data.var %>%
+        group_by(col.index) %>%
+        summarize(n=sum(n.unweighted, na.rm=T)) %>%
+        arrange(col.index) %>%
+        mutate(n=sprintf("n=%d", n)) %>%
+        column_to_rownames("col.index") %>%
+        t() %>%
+        as.data.frame() %>%
+        mutate(label="Aantal respondenten",
+               matchcode=paste0(indeling_rijen$inhoud[i], "_n")) %>%
+        relocate(matchcode, label)
       
       # voor het schrijven naar Excel is een matrix met getallen makkelijker
       # het kan voorkomen dat niet alle antwoordmogelijkheden in elke subset aanwezig zijn
@@ -370,12 +388,24 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
           header.col.rows = c(header.col.rows, c)
           c = c + header.col.nrows
           
-          # TODO: nvar toevoegen?
           # regel met procenttekens
           writeData(wb, subset.name, t(rep("%", n.col)), startCol=3, startRow=c, colNames=F)
           addStyle(wb, subset.name, style.perc, cols=3:n.col.total, rows=c, gridExpand=T, stack=T)
           perc.rows = c(perc.rows, c)
           c = c + 1
+        }
+        
+        # regel met aantallen, indien gewenst
+        if (indeling_rijen$type[i] == "nvar") {
+          if (i > 1 && indeling_rijen$type[i-1] == "nvar") {
+            msg("Let op! De variabele %s op rij %d heeft als type 'nvar', maar dit betreft een dichotome variabele in een lijst. Alleen het aantal respondenten van de eerste variabele wordt weergegeven.",
+                indeling_rijen$inhoud[i], i, level=WARN)
+          } else {
+            writeData(wb, subset.name, n_var, startCol=1, startRow=c, colNames=F)
+            addStyle(wb, subset.name, style.num, cols=3:n.col.total, rows=c, gridExpand=T, stack=T)
+            data.rows = c(data.rows, c)
+            c = c + 1
+          }
         }
       } else { # niet dichotoom
         # labels toevoegen
@@ -401,13 +431,20 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
           c = c + header.col.nrows
         }
         
-        # TODO: nvar toevoegen?
         # regel met procenttekens
         writeData(wb, subset.name, t(rep("%", n.col)), startCol=3, startRow=c, colNames=F)
         addStyle(wb, subset.name, style.perc, cols=3:n.col.total, rows=c, gridExpand=T, stack=T)
         perc.rows = c(perc.rows, c)
         
         c = c + 1
+        
+        # regel met aantallen, indien gewenst
+        if (indeling_rijen$type[i] == "nvar") {
+          writeData(wb, subset.name, n_var, startCol=1, startRow=c, colNames=F)
+          addStyle(wb, subset.name, style.num, cols=3:n.col.total, rows=c, gridExpand=T, stack=T)
+          data.rows = c(data.rows, c)
+          c = c + 1
+        }
       }
       
       labels.oversized = which(str_length(output[,2]) > design("label_max_lengte"))
