@@ -41,7 +41,8 @@ opmaak.default = read.table(text='"type" "waarde"
 "20" "header_stijl" "enkel"
 "21" "header_template" "Totaal [naam] [jaar]"
 "22" "crossing_headers_kleiner" "TRUE"
-"23" "label_max_lengte" "66"')
+"23" "label_max_lengte" "66"
+"24" "naam_tabellenboek" "Overzicht"')
 
 design = function (var) {
   if (str_length(var) <= 1) {
@@ -83,7 +84,7 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
   subset.val = unname(subset.val)
   
   if (is.na(subset.name) || is.null(subset.name))
-    subset.name = "Overzicht"
+    subset.name = design("naam_tabellenboek")
   
   # Excel heeft een maximum voor de naam van een tabblad; afkorten?
   subset.name.full = subset.name
@@ -381,22 +382,27 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
         # significantie ook aanpassen naar 1 regel
         sign = sign %>% filter(val == 1) %>% mutate(rij=1)
         
-        # is de vorige regel een kop? dan headers en percentages toevoegen
+        # is de vorige regel een kop of vraag? dan headers en percentages toevoegen
         # als de vorige regel een vraag is dan heeft deze dat al
         if (i > 1 && indeling_rijen$type[i-1] == "kop" && is.na(indeling_rijen$kolomkoppen[i])) {
           # ruimte vrijhouden voor het later invoegen van headers
           header.col.rows = c(header.col.rows, c)
           c = c + header.col.nrows
           
+          # regel met aantallen, indien gewenst
+          if (indeling_rijen$type[i] == "nvar") {
+            writeData(wb, subset.name, n_var, startCol=1, startRow=c, colNames=F)
+            addStyle(wb, subset.name, style.num, cols=3:n.col.total, rows=c, gridExpand=T, stack=T)
+            data.rows = c(data.rows, c)
+            c = c + 1
+          }
+          
           # regel met procenttekens
           writeData(wb, subset.name, t(rep("%", n.col)), startCol=3, startRow=c, colNames=F)
           addStyle(wb, subset.name, style.perc, cols=3:n.col.total, rows=c, gridExpand=T, stack=T)
           perc.rows = c(perc.rows, c)
           c = c + 1
-        }
-        
-        # regel met aantallen, indien gewenst
-        if (indeling_rijen$type[i] == "nvar") {
+        } else if (indeling_rijen$type[i] == "nvar") {
           if (i > 1 && indeling_rijen$type[i-1] == "nvar") {
             msg("Let op! De variabele %s op rij %d heeft als type 'nvar', maar dit betreft een dichotome variabele in een lijst. Alleen het aantal respondenten van de eerste variabele wordt weergegeven.",
                 indeling_rijen$inhoud[i], i, level=WARN)
@@ -431,13 +437,6 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
           c = c + header.col.nrows
         }
         
-        # regel met procenttekens
-        writeData(wb, subset.name, t(rep("%", n.col)), startCol=3, startRow=c, colNames=F)
-        addStyle(wb, subset.name, style.perc, cols=3:n.col.total, rows=c, gridExpand=T, stack=T)
-        perc.rows = c(perc.rows, c)
-        
-        c = c + 1
-        
         # regel met aantallen, indien gewenst
         if (indeling_rijen$type[i] == "nvar") {
           writeData(wb, subset.name, n_var, startCol=1, startRow=c, colNames=F)
@@ -445,6 +444,13 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
           data.rows = c(data.rows, c)
           c = c + 1
         }
+        
+        # regel met procenttekens
+        writeData(wb, subset.name, t(rep("%", n.col)), startCol=3, startRow=c, colNames=F)
+        addStyle(wb, subset.name, style.perc, cols=3:n.col.total, rows=c, gridExpand=T, stack=T)
+        perc.rows = c(perc.rows, c)
+        
+        c = c + 1
       }
       
       labels.oversized = which(str_length(output[,2]) > design("label_max_lengte"))

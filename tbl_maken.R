@@ -845,7 +845,7 @@ log.save = T
     
     if (is.null(subsetmatches)) {
       # geen subsets, 1 tabellenboek
-      msg("Digitoegankelijk tabellenboek wordt gemaakt: Overzicht.html.", level=MSG)
+      msg("Digitoegankelijk tabellenboek wordt gemaakt.", level=MSG)
       MakeHtml(results, var_labels, kolom_opbouw, NA, NA, subsetmatches, n_resp, template_html)
     } else {
       # wel subsets, meerdere tabellenboeken
@@ -864,7 +864,7 @@ log.save = T
   source(paste0(dirname(this.path()), "/tbl_MakeExcel.R"))
   if (is.null(subsetmatches)) {
     # geen subsets, 1 tabellenboek
-    msg("Tabellenboek wordt gemaakt: Overzicht.xlsx.", level=MSG)
+    msg("Tabellenboek wordt gemaakt.", level=MSG)
     MakeExcel(results, var_labels, kolom_opbouw, NA, NA, subsetmatches, n_resp)
   } else {
     # wel subsets, meerdere tabellenboeken

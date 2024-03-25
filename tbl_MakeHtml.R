@@ -47,7 +47,8 @@ opmaak.default = read.table(text='"type" "waarde"
 "20" "header_stijl" "enkel"
 "21" "header_template" "Totaal [naam] [jaar]"
 "22" "crossing_headers_kleiner" "TRUE"
-"23" "label_max_lengte" "66"')
+"23" "label_max_lengte" "66"
+"24" "naam_tabellenboek" "Overzicht"')
 
 design = function (var) {
   if (str_length(var) <= 1) {
@@ -168,7 +169,7 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
   subset.val = unname(subset.val)
   
   if (is.na(subset.name) || is.null(subset.name))
-    subset.name = "Overzicht"
+    subset.name = design("naam_tabellenboek")
   
   # basiselementen invullen
   template = str_replace_all(template, fixed("{titel}"), subset.name)
@@ -347,8 +348,8 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
       table.output = c(table.output, paste0("<table>\r\n",
                                             "<caption>", question.cache, "</caption>\r\n",
                                             header.output, "\r\n",
-                                            perc.row.output,
                                             ifelse(!is.null(n.cache), BuildHtmlTableRows(n.cache, col.design, T), ""),
+                                            perc.row.output, "\r\n",
                                             "<tbody>\r\n",
                                             BuildHtmlTableRows(table.cache, col.design),
                                             "</tbody>\r\n",
@@ -577,8 +578,8 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
           table.output = c(table.output, paste0("<table>\r\n",
                                                 "<caption>", question.cache, "</caption>\r\n",
                                                 header.output, "\r\n",
-                                                perc.row.output,
                                                 ifelse(!is.null(n.cache), BuildHtmlTableRows(n.cache, col.design, T), ""),
+                                                perc.row.output, "\r\n",
                                                 "<tbody>\r\n",
                                                 BuildHtmlTableRows(table.cache, col.design),
                                                 "</tbody>\r\n",
@@ -595,8 +596,8 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
                                               # titel van de vraag toevoegen
                                               "<caption>", var_labels$label[var_labels$var == indeling_rijen$inhoud[i] & var_labels$val == "var"], "</caption>\r\n",
                                               header.output, "\r\n",
-                                              perc.row.output,
                                               ifelse(indeling_rijen$type[i] == "nvar", BuildHtmlTableRows(n_var, col.design, T), ""),
+                                              perc.row.output, "\r\n",
                                               "<tbody>\r\n",
                                               BuildHtmlTableRows(output, col.design),
                                               "</tbody>\r\n",
