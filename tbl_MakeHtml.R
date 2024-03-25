@@ -558,7 +558,7 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
         
         if (!is.null(table.cache)) {
           table.cache = bind_rows(table.cache, output)
-          if (is.null(n.cache)) {
+          if (!is.null(n.cache) && indeling_rijen$type[i] == "nvar") {
             msg("Let op! De variabele %s op rij %d heeft als type 'nvar', maar dit betreft een dichotome variabele in een lijst. Alleen het aantal respondenten van de eerste variabele wordt weergegeven.",
                 indeling_rijen$inhoud[i], i, level=WARN)
           } else {
@@ -701,14 +701,14 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
   # en als laatste... opslaan!
   tryCatch({
     #saveWorkbook(wb, sprintf("output/%s.xlsx", subset.name), overwrite=T)
-    cat(template, file=sprintf("output/%s.html", subset.name))
+    cat(template, file=sprintf("output/%s.html", str_replace(subset.name, "\\\\|/", " ")))
     msg("Digitoegankelijk tabellenboek voor %s opgeslagen.", subset.name, level=MSG)
   },
   error = function(e){
-    msg("Er is een fout opgetreden bij het maken van het Excelbestand: %s", e, level=MSG)
+    msg("Er is een fout opgetreden bij het maken van het digitoegankelijke tabellenboek: %s", e$message, level=MSG)
   },
-  warning = function(cond){
-    msg("Er is een fout opgetreden bij het maken van het Excelbestand: %s", e, level=MSG)
+  warning = function(e){
+    msg("Er is een fout opgetreden bij het maken van het digitoegankelijke tabellenboek: %s", e$message, level=MSG)
   })
   
 }
