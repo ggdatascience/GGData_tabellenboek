@@ -177,7 +177,14 @@ log.save = T
   # datasets combineren en de strata en weegfactoren apart opslaan
   data.combined = data.frame()
   for (d in 1:nrow(datasets)) {
+    
     msg("Inladen dataset %d: %s", d, datasets$naam_dataset[d], level=MSG)
+    
+    # zoek naar nieuw te maken datasets die een parent dataset hebben, geef ze alvast goed data path
+    splitted_naam_dataset <- strsplit(datasets$naam_dataset[d], "")[[1]]
+    if(splitted_naam_dataset[1] == "_"){
+      datasets$bestandsnaam[d] <- datasets$bestandsnaam[which(datasets$naam_dataset == paste(splitted_naam_dataset[-1], collapse = ""))]
+    }
     
     # .sav aan het einde kan vergeten worden...
     if (!str_ends(datasets$bestandsnaam[d], fixed(".sav"))) {
@@ -198,6 +205,12 @@ log.save = T
                         msg("Fout tijdens het inlezen van dataset %d: %s", d, e, level=ERR)
                       }
                     })
+    
+    # als dit een dataset is met een parent dataset, voer hier de filtering uit.
+    # deze filtering staat in
+    if(splitted_naam_dataset[1] == "_"){
+      data <- data %>% filter(!!rlang::parse_expr(datasets$filter[d]))
+    }
     
     # afwijkende kolommen registreren zodat we deze later kunnen scheiden
     afwijkend = c()
