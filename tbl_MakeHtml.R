@@ -48,7 +48,8 @@ opmaak.default = read.table(text='"type" "waarde"
 "21" "header_template" "Totaal [naam] [jaar]"
 "22" "crossing_headers_kleiner" "TRUE"
 "23" "label_max_lengte" "66"
-"24" "naam_tabellenboek" "Overzicht"')
+"24" "naam_tabellenboek" "Overzicht"
+"25" "verberg_lege_kolommen" "FALSE"')
 
 design = function (var) {
   if (str_length(var) <= 1) {
@@ -96,7 +97,9 @@ BuildHtmlTableRows = function (input, col.design, n=F) {
   # gewenste output is opgemaakte rijen met significantie aangegeven
   
   # kolomindeling, nodig als kolommen per crossing gekleurd moeten worden
-  colors = group_indices(col.design %>% group_by(dataset, subset, year, crossing))
+  col.design = col.design %>% group_by(dataset, subset, year, crossing)
+  colors = group_rows(col.design)[order(sapply(group_rows(col.design),'[[',1))]
+  colors = sapply(1:length(colors), function(i) { return(rep(i, length(colors[[i]]))) }) %>% unlist()
   
   output = ""
   for (i in 1:nrow(input)) {
@@ -124,10 +127,12 @@ BuildHtmlTableRows = function (input, col.design, n=F) {
         htmlclass = c(htmlclass, "data_missend")
       } else {
         val = sprintf("%s%.0f", ifelse(n, "n=", ""), val)
-        if (c %in% unlist(input$sign[i])) {
-          htmlclass = c(htmlclass, "sign")
-        }
       } 
+      
+      # significant?
+      if (colnames(input)[c+2] %in% unlist(input$sign[i])) {
+        htmlclass = c(htmlclass, "sign")
+      }
       
       # kolom kleuren o.b.v. crossing of index?
       if (design("kolommen_afwisselend_kleuren")) {
@@ -145,7 +150,7 @@ BuildHtmlTableRows = function (input, col.design, n=F) {
       # klassen toevoegen aan de opmaak
       htmlclass = ifelse(length(htmlclass) > 0, sprintf(' class="%s"', str_c(htmlclass, collapse=" ")), "")
       # significant?
-      if (c %in% unlist(input$sign[i])) {
+      if (colnames(input)[c+2] %in% unlist(input$sign[i])) {
         htmlclass = paste0(htmlclass, " title=\"", algemeen$sign_hovertekst, "\"")
       }
       
@@ -178,6 +183,32 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
   design.vars = str_extract_all(template, "\\[[a-zA-Z_]{3,}\\]") %>% unlist() %>% str_sub(start=2, end=-2)
   for (var in design.vars) {
     template = str_replace_all(template, fixed(paste0("[", var, "]")), design(var))
+  }
+  
+  # moeten er kolommen verborgen worden?
+  hide.cols = c()
+  for (j in 1:nrow(col.design)) {
+    if (!is.na(col.design$subset[j])) {
+      subset.col = subset.val
+      if (col.design$subset[j] != subset) {
+        subset.col = subsetmatches[subsetmatches[,1] == subset.val, col.design$subset[j]]
+      }
+      
+      n = n_resp$n[which(n_resp$col == j & NA.identical(n_resp$year, col.design$year[j]) & NA.identical(n_resp$crossing, col.design$crossing[j]) & NA.identical(n_resp$subset, subset.col))]
+    } else {
+      n = n_resp$n[which(n_resp$col == j & NA.identical(n_resp$year, col.design$year[j]) & NA.identical(n_resp$crossing, col.design$crossing[j]) & is.na(n_resp$subset))]
+    }
+    
+    # het is mogelijk dat er helemaal geen deelnemers zijn; dan willen we dat aangeven
+    if (length(n) == 0 || is.na(n) || n <= 0) n = 0
+    col.design$n[j] = n
+  } 
+  if (design("verberg_lege_kolommen")) {
+    hide.cols = col.design$col.index[col.design$n == 0]
+    #hide.cols = c(5)
+    if (length(hide.cols) > 0) {
+      col.design = col.design[-which(col.design$col.index %in% hide.cols),]
+    }
   }
   
   # instellingen
@@ -220,7 +251,9 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
   }
   
   # afwisselend kleuren van kolommen/groepen?
-  colors = group_indices(col.design %>% group_by(dataset, subset, year, crossing))
+  col.design = col.design %>% group_by(dataset, subset, year, crossing)
+  colors = group_rows(col.design)[order(sapply(group_rows(col.design),'[[',1))]
+  colors = sapply(1:length(colors), function(i) { return(rep(i, length(colors[[i]]))) }) %>% unlist()
   # kolomkoppen in HTML gieten
   perc.row.output = "<tr><td />"
   for (i in 1:nrow(col.design)) {
@@ -386,25 +419,9 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
       
       table.output = c(table.output, paste0(output, "\r\n"))
     } else if (indeling_rijen$type[i] == "aantallen") { # regel met aantal deelnemers toevoegen
-      output = matrix(nrow=1, ncol=nrow(col.design))
-      for (j in 1:nrow(col.design)) {
-        if (!is.na(col.design$subset[j])) {
-          subset.col = subset.val
-          if (col.design$subset[j] != subset) {
-            subset.col = subsetmatches[subsetmatches[,1] == subset.val, col.design$subset[j]]
-          }
-          
-          n = n_resp$n[which(n_resp$col == j & NA.identical(n_resp$year, col.design$year[j]) & NA.identical(n_resp$crossing, col.design$crossing[j]) & NA.identical(n_resp$subset, subset.col))]
-        } else {
-          n = n_resp$n[which(n_resp$col == j & NA.identical(n_resp$year, col.design$year[j]) & NA.identical(n_resp$crossing, col.design$crossing[j]) & is.na(n_resp$subset))]
-        }
-        
-        # het is mogelijk dat er helemaal geen deelnemers zijn; dan willen we dat aangeven
-        if (length(n) == 0 || is.na(n) || n <= 0) n = Q_MISSING
-        output[j] = n
-      }    
-
-      output = output %>% as.data.frame() %>% mutate(label="Aantal deelnemers", sign=NA, .before=1)
+      output = matrix(data=col.design$n, nrow=1, ncol=nrow(col.design)) %>%
+        as.data.frame() %>%
+        mutate(label="Aantal deelnemers", sign=NA, .before=1)
       
       table.output = c(table.output, paste0("<table>\r\n",
                                             "<caption>Aantal deelnemers</caption>",
@@ -441,7 +458,7 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
                                      results$var == indeling_rijen$inhoud[i]),
                              c("val", "crossing", "crossing.val", "sign", "sign.vs", "n.unweighted", "perc.weighted")]
           if (nrow(data.tmp) == 0) next
-          data.tmp$col.index = j
+          data.tmp$col.index = col.design$col.index[j]
           data.var = bind_rows(data.var, data.tmp)
         }
         else {
@@ -452,7 +469,7 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
                                      results$var == indeling_rijen$inhoud[i]),
                              c("val", "crossing", "crossing.val", "sign", "sign.vs", "n.unweighted", "perc.weighted")]
           if (nrow(data.tmp) == 0) next
-          data.tmp$col.index = j
+          data.tmp$col.index = col.design$col.index[j]
           data.var = bind_rows(data.var, data.tmp)
         }
       }
@@ -471,6 +488,7 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
       # het kan voorkomen dat niet alle antwoordmogelijkheden in elke subset aanwezig zijn
       # daarom nemen we hier de bekende labels, i.p.v. de voorkomende waardes
       output = matrix(nrow=length(var_labels$val[var_labels$var == indeling_rijen$inhoud[i] & var_labels$val != "var"]), ncol=nrow(col.design))
+      colnames(output) = col.design$col.index
       # het kan in zeldzame gevallen voorkomen dat er meer dan 10 antwoorden zijn
       # in zo'n geval zal sort() er 1 10 11 12 2 3 4 van maken, omdat het strings zijn
       # voor de indeling zijn we echter wel afhankelijk van een character... dus dubbele omzetting!
@@ -479,22 +497,22 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
       # dit zou in theorie ook zonder for kunnen, maar overzichtelijkheid
       for (j in 1:nrow(col.design)) {
         # N.B.: as.character() is hier nodig omdat R niet om kan gaan met een numerieke rijnaam 0, maar wel met karakter "0"
-        vals = as.character(data.var$val[data.var$col.index == j & data.var$val %in% rownames(output)])
-        output[vals,j] = data.var$perc.weighted[data.var$col.index == j & data.var$val %in% rownames(output)]
+        vals = as.character(data.var$val[data.var$col.index == col.design$col.index[j] & data.var$val %in% rownames(output)])
+        output[vals,j] = data.var$perc.weighted[data.var$col.index == col.design$col.index[j] & data.var$val %in% rownames(output)]
         if ("weergave" %in% algemeen && algemeen$weergave == "n")
-          output[vals,j] = data.var$n[data.var$col.index == j & data.var$val %in% rownames(output)]
+          output[vals,j] = data.var$n[data.var$col.index == col.design$col.index[j] & data.var$val %in% rownames(output)]
         
         # waarden onder de afkapgrens vervangen
         output[which(output[,j] <= algemeen$afkapwaarde_antwoord),j] = A_TOOSMALL
         
         #PS:
         #Metingen die o.b.v te lage aantallen zijn vervangen 
-        if (sum(data.var$n.unweighted[data.var$col.index == j], na.rm=T) == 0) {
+        if (sum(data.var$n.unweighted[data.var$col.index == col.design$col.index[j]], na.rm=T) == 0) {
           output[,j] = Q_MISSING
-        } else if (sum(data.var$n.unweighted[data.var$col.index == j], na.rm=T) < algemeen$min_observaties_per_vraag) {
+        } else if (sum(data.var$n.unweighted[data.var$col.index == col.design$col.index[j]], na.rm=T) < algemeen$min_observaties_per_vraag) {
           #Alle percentages wegstrepen als aantallen per groep te klein zijn.
           output[,j] <- Q_TOOSMALL
-        } else if(any(data.var$n.unweighted[data.var$col.index == j] < algemeen$min_observaties_per_antwoord, na.rm=T)) {
+        } else if(any(data.var$n.unweighted[data.var$col.index == col.design$col.index[j]] < algemeen$min_observaties_per_antwoord, na.rm=T)) {
           # Bij een cel met te weinig antwoorden zijn er twee opties:
           # 1) De hele kolom verbergen, om herleidbaarheid te voorkomen.
           # 2) Alleen die cel verbergen.
@@ -505,7 +523,7 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
           }
           else {
             # alleen de cel wegstrepen
-            data.col = data.var[data.var$col.index == j & data.var$val %in% rownames(output),]
+            data.col = data.var[data.var$col.index == col.design$col.index[j] & data.var$val %in% rownames(output),]
             output[rownames(output) %in% data.col$val[which(data.col$n.unweighted < algemeen$min_observaties_per_antwoord)],j] <- A_TOOSMALL
           }
         }

@@ -42,7 +42,8 @@ opmaak.default = read.table(text='"type" "waarde"
 "21" "header_template" "Totaal [naam] [jaar]"
 "22" "crossing_headers_kleiner" "TRUE"
 "23" "label_max_lengte" "66"
-"24" "naam_tabellenboek" "Overzicht"')
+"24" "naam_tabellenboek" "Overzicht"
+"25" "verberg_lege_kolommen" "FALSE"')
 
 design = function (var) {
   if (str_length(var) <= 1) {
@@ -90,6 +91,31 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
   subset.name.full = subset.name
   if (str_length(subset.name) > 31) {
     subset.name = paste0(str_sub(subset.name, end=27), "...")
+  }
+  
+  # moeten er kolommen verborgen worden?
+  hide.cols = c()
+  for (j in 1:nrow(col.design)) {
+    if (!is.na(col.design$subset[j])) {
+      subset.col = subset.val
+      if (col.design$subset[j] != subset) {
+        subset.col = subsetmatches[subsetmatches[,1] == subset.val, col.design$subset[j]]
+      }
+      
+      n = n_resp$n[which(n_resp$col == j & NA.identical(n_resp$year, col.design$year[j]) & NA.identical(n_resp$crossing, col.design$crossing[j]) & NA.identical(n_resp$subset, subset.col))]
+    } else {
+      n = n_resp$n[which(n_resp$col == j & NA.identical(n_resp$year, col.design$year[j]) & NA.identical(n_resp$crossing, col.design$crossing[j]) & is.na(n_resp$subset))]
+    }
+    
+    # het is mogelijk dat er helemaal geen deelnemers zijn; dan willen we dat aangeven
+    if (length(n) == 0 || is.na(n) || n <= 0) n = 0
+    col.design$n[j] = n
+  } 
+  if (design("verberg_lege_kolommen")) {
+    hide.cols = col.design$col.index[col.design$n == 0]
+    if (length(hide.cols) > 0) {
+      col.design = col.design[-which(col.design$col.index %in% hide.cols),]
+    }
   }
   
   wb = createWorkbook(creator="GGData Tabellenboek")
@@ -204,23 +230,8 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
       
       c = c + 1 #ifelse(indeling_rijen$type[i] == "tekst", 1, 2) # een extra witregel na een kop of titel
     } else if (indeling_rijen$type[i] == "aantallen") { # regel met aantal deelnemers toevoegen
-      output = matrix(nrow=1, ncol=nrow(col.design))
-      for (j in 1:nrow(col.design)) {
-        if (!is.na(col.design$subset[j])) {
-          subset.col = subset.val
-          if (col.design$subset[j] != subset) {
-            subset.col = subsetmatches[subsetmatches[,1] == subset.val, col.design$subset[j]]
-          }
-          
-          n = n_resp$n[which(n_resp$col == j & NA.identical(n_resp$year, col.design$year[j]) & NA.identical(n_resp$crossing, col.design$crossing[j]) & NA.identical(n_resp$subset, subset.col))]
-        } else {
-          n = n_resp$n[which(n_resp$col == j & NA.identical(n_resp$year, col.design$year[j]) & NA.identical(n_resp$crossing, col.design$crossing[j]) & is.na(n_resp$subset))]
-        }
-        
-        # het is mogelijk dat er helemaal geen deelnemers zijn; dan willen we dat aangeven
-        if (length(n) == 0 || is.na(n) || n <= 0) n = Q_MISSING
-        output[j] = n
-      }    
+      output = matrix(data=col.design$n, nrow=1, ncol=nrow(col.design))
+      output[,output == 0] = Q_MISSING
 
       # ruimte vrijhouden voor het later invoegen van headers
       header.col.rows = c(header.col.rows, c)
@@ -298,6 +309,7 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
       # het kan voorkomen dat niet alle antwoordmogelijkheden in elke subset aanwezig zijn
       # daarom nemen we hier de bekende labels, i.p.v. de voorkomende waardes
       output = matrix(nrow=length(var_labels$val[var_labels$var == indeling_rijen$inhoud[i] & var_labels$val != "var"]), ncol=nrow(col.design))
+      colnames(output) = col.design$col.index
       # het kan in zeldzame gevallen voorkomen dat er meer dan 10 antwoorden zijn
       # in zo'n geval zal sort() er 1 10 11 12 2 3 4 van maken, omdat het strings zijn
       # voor de indeling zijn we echter wel afhankelijk van een character... dus dubbele omzetting!
@@ -531,6 +543,10 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
       col.name = subset.name
       if (col.design$subset[i] != subset) {
         col.name = var_labels$label[var_labels$var == col.design$subset[i] & var_labels$val == subsetmatches[subsetmatches[,1] == subset.val, col.design$subset[i]]]
+        if (length(col.name) == 0) {
+          msg("Let op! Kolom %d (subsetvariabele %s) heeft geen passend label. Waarschijnlijk missen de labels in SPSS. Voor nu wordt hier '-' aangenomen.", i, col.design$subset[i], level=WARN)
+          col.name = "-"
+        }
       }
     }
     
