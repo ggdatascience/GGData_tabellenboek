@@ -185,8 +185,12 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
     template = str_replace_all(template, fixed(paste0("[", var, "]")), design(var))
   }
   
+  # weergave significantie in andere kolommen?
+  sign.replacement = col.design[!col.design$test.display, c("col.index", "test.col")]
+  colnames(sign.replacement) = c("old", "new")
+  
   # moeten er kolommen verborgen worden?
-  hide.cols = c()
+  # let op: bij deze versie hoeft er geen rekening gehouden te worden met het verspringen van de significantieresultaten, omdat de kolommen vanzelf de juiste naam krijgen
   for (j in 1:nrow(col.design)) {
     if (!is.na(col.design$subset[j])) {
       subset.col = subset.val
@@ -203,9 +207,10 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
     if (length(n) == 0 || is.na(n) || n <= 0) n = 0
     col.design$n[j] = n
   } 
-  if (design("verberg_lege_kolommen")) {
+  hide.cols = c()
+  if (T) { #design("verberg_lege_kolommen")) {
     hide.cols = col.design$col.index[col.design$n == 0]
-    #hide.cols = c(5)
+    hide.cols = c(5)
     if (length(hide.cols) > 0) {
       col.design = col.design[-which(col.design$col.index %in% hide.cols),]
     }
@@ -538,6 +543,12 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
       
       # significante resultaten zichtbaar maken
       sign = data.var[which(data.var$sign < algemeen$confidence_level), c("val", "col.index")]
+      # kolomgetal vervangen, indien nodig
+      if (nrow(sign.replacement) > 0) {
+        for (j in 1:nrow(sign.replacement)) {
+          sign$col.index[which(sign$col.index == sign.replacement$old[j])] = sign.replacement$new[j]
+        }
+      }
       
       # output herschrijven naar een bruikbaar formaat
       output = output %>% as.data.frame() %>% rownames_to_column("val") %>%

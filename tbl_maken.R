@@ -146,6 +146,14 @@ log.save = T
     msg("Er is geen kolom met de naam 'sign_hovertekst' aanwezig in algemeen. Standaardinstelling (\"Deze waarde is significant anders.\") wordt aangenomen.", level=WARN)
   }
   
+  # en sign_doelkolom bij onderdelen
+  if (!"sign_doelkolom" %in% colnames(onderdelen)) {
+    onderdelen$sign_doelkolom = F
+    msg("Er is geen kolom met de naam 'sign_doelkolom' aanwezig in onderdelen. Standaardinstelling (ONWAAR) wordt aangenomen.", level=WARN)
+  } else {
+    onderdelen$sign_doelkolom[is.na(onderdelen$sign_doelkolom)] = F
+  }
+  
   # variabelelijst afleiden uit de indeling van het tabellenboek;
   # iedere regel met (n)var is een variabele die we nodig hebben
   varlist = indeling_rijen[indeling_rijen$type %in% c("var", "nvar"),]
@@ -463,7 +471,7 @@ log.save = T
         kolom_opbouw = bind_rows(kolom_opbouw, data.frame(col.index=nrow(kolom_opbouw)+(1:n), dataset=rep(d, n),
                                                           subset=rep(onderdelen$subset[i], n), year=rep(onderdelen$jaar[i], n),
                                                           crossing=rep(crossing, n), crossing.val=unname(crossing.labels),
-                                                          crossing.lab=names(crossing.labels), test.col=rep(test.col, n)))
+                                                          crossing.lab=names(crossing.labels), test.col=rep(test.col, n), test.display=T))
       }
     }
     
@@ -485,7 +493,7 @@ log.save = T
     }
     
     kolom_opbouw = bind_rows(kolom_opbouw, data.frame(col.index=nrow(kolom_opbouw)+1, dataset=d, subset=onderdelen$subset[i], year=onderdelen$jaar[i],
-                                                      crossing=NA, crossing.val=NA, crossing.lab=NA, test.col=test.col))
+                                                      crossing=NA, crossing.val=NA, crossing.lab=NA, test.col=test.col, test.display=!onderdelen$sign_doelkolom[i]))
   }
   
   # moeten er nog testkolommen toegevoegd worden uit de cache?
@@ -597,7 +605,10 @@ log.save = T
     varlist.cmp = varlist %>% select(inhoud, starts_with("weeg"))
     varlist.prev.cmp = varlist.prev %>% select(inhoud, starts_with("weeg"))
     
-    if (identical.enough(kolom_opbouw, kolom_opbouw.prev) && identical.enough(varlist.cmp, varlist.prev.cmp)) {
+    # sign_doelkolom is nieuw; deze mag missen
+    kolom_opbouw.cmp = kolom_opbouw %>% select(-test.display)
+    
+    if (identical.enough(kolom_opbouw.cmp, kolom_opbouw.prev) && identical.enough(varlist.cmp, varlist.prev.cmp)) {
       msg("Eerdere resultaten aangetroffen vanuit deze configuratie (%s). Berekening wordt overgeslagen. Indien er nieuwe data is toegevoegd, verwijder dan de bestanden uit de map resultaten_csv.",
           basename(config.file), level=MSG)
       
