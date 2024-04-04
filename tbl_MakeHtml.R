@@ -210,7 +210,6 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
   hide.cols = c()
   if (T) { #design("verberg_lege_kolommen")) {
     hide.cols = col.design$col.index[col.design$n == 0]
-    hide.cols = c(5)
     if (length(hide.cols) > 0) {
       col.design = col.design[-which(col.design$col.index %in% hide.cols),]
     }
