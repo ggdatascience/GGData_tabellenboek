@@ -482,7 +482,10 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
       n_var = data.var %>%
         group_by(col.index) %>%
         summarize(n=sum(n.unweighted, na.rm=T)) %>%
+        full_join(data.frame(col.index=col.design$col.index, dummy=0), by="col.index") %>% # zorgen dat alle waardes aanwezig zijn, ook bij lege kolommen
         arrange(col.index) %>%
+        mutate(n=coalesce(n, 0)) %>%
+        select(-dummy) %>%
         column_to_rownames("col.index") %>%
         t() %>%
         as.data.frame() %>%

@@ -307,7 +307,10 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
       n_var = data.var %>%
         group_by(col.index) %>%
         summarize(n=sum(n.unweighted, na.rm=T)) %>%
+        full_join(data.frame(col.index=col.design$col.index, dummy=0), by="col.index") %>% # zorgen dat alle waardes aanwezig zijn, ook bij lege kolommen
+        mutate(n=coalesce(n, 0)) %>%
         arrange(col.index) %>%
+        select(-dummy) %>%
         mutate(n=sprintf("n=%d", n)) %>%
         column_to_rownames("col.index") %>%
         t() %>%
