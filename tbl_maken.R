@@ -182,6 +182,8 @@ log.save = T
         str_c(crossings[crossings %in% varlist$inhoud], ", "), level=WARN)
   }
   
+  msg("Start verwerking configuratiebestand %s...", config.file, level=MSG)
+  
   # datasets combineren en de strata en weegfactoren apart opslaan
   data.combined = data.frame()
   for (d in 1:nrow(datasets)) {
