@@ -518,6 +518,9 @@ log.save = T
     # ook splitsen per subset?
     if (!is.na(kolom_opbouw$subset[i])) {
       subsetvals = val_labels(data[[kolom_opbouw$subset[i]]])
+      if (is.null(subsetvals))
+        msg("In kolom %d wordt gesplitst op subset %s, maar deze variabele heeft geen labels in de dataset. Hierdoor kunnen de resultaten niet worden berekend. Voeg labels toe aan de dataset, of pas de kolomindeling aan op het tabblad onderdelen.",
+            i, kolom_opbouw$subset[i], level=ERR)
       
       for (val in subsetvals) {
         subset = kolom & data[[kolom_opbouw$subset[i]]] == val

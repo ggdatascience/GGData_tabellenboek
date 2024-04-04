@@ -99,6 +99,12 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
         # 2) een extra subsetvariabele, gebaseerd op de leidende subsetvariabele -> zoek welke overkoepelende subset hierbij hoort en vul die in
         subsetval = subsetvals[s]
         if (colgroups$subset[i] != leadingsubset) {
+          # vergelijken van significantie met een 'hoger gelegen' subset kan niet
+          # stel bijvoorbeeld dat er een kolom is met gemeente, en een kolom met subregio, dan kan alleen gemeente vs. subregio, niet andersom
+          if (!is.na(colgroups$test.col[i]) && (col.design$subset[colgroups$test.col[i]] == leadingsubset || col.design$subset[colgroups$test.col[i]] != colgroups$subset[i])) {
+            msg("Let op! P-waardes kunnen alleen berekend worden van klein naar groot niveau. Een vergelijking van %s met %s (kolom %d) is daardoor niet mogelijk. Verander deze volgorde als significantie berekend moet worden.",
+                colgroups$subset[i], col.design$subset[colgroups$test.col[i]], colgroups$test.col[i], level=ERR)
+          }
           subsetval = subsetmatches[subsetmatches[,1] == subsetvals[s], colgroups$subset[i]]
         }
         
