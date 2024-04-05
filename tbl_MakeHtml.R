@@ -111,7 +111,7 @@ BuildHtmlTableRows = function (input, col.design, n=F) {
         htmlclass = " class=\"rij_a\""
     }
     
-    output = paste0(output, sprintf('<tr%s><th scope="row">%s</th>', htmlclass, input$label[i]))
+    output = paste0(output, sprintf('<tr%s><th scope="row">%s</th>', htmlclass, HTMLencode(input$label[i])))
     for (c in 1:(ncol(input) - 2)) {
       val = input[i, c+2]
       htmlclass = c()
@@ -177,7 +177,7 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
     subset.name = design("naam_tabellenboek")
   
   # basiselementen invullen
-  template = str_replace_all(template, fixed("{titel}"), subset.name)
+  template = str_replace_all(template, fixed("{titel}"), HTMLencode(subset.name))
   
   # opmaak
   design.vars = str_extract_all(template, "\\[[a-zA-Z_]{3,}\\]") %>% unlist() %>% str_sub(start=2, end=-2)
@@ -243,10 +243,10 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
       
       if (distance > 1) {
         cols.output = paste0(cols.output, sprintf("<colgroup span=\"%d\" />", distance))
-        labels.output = paste0(labels.output, sprintf("<th colspan=\"%d\" scope=\"colgroup\">%s</th>", distance, header.labels[i]))
+        labels.output = paste0(labels.output, sprintf("<th colspan=\"%d\" scope=\"colgroup\">%s</th>", distance, HTMLencode(header.labels[i])))
       } else {
         cols.output = paste0(cols.output, "<colgroup><col /></colgroup>")
-        labels.output = paste0(labels.output, sprintf("<th scope=\"col\">%s</th>", header.labels[i]))
+        labels.output = paste0(labels.output, sprintf("<th scope=\"col\">%s</th>", HTMLencode(header.labels[i])))
       }
     }
     
@@ -284,7 +284,7 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
       # TODO: iets doen met kleinere labels voor crossings
       # if (design("crossing_headers_kleiner") && sum(!is.na(col.design$crossing)) > 0)
       
-      labels.output = paste0(labels.output, sprintf("<th scope=\"col\"%s>%s</th>", htmlclass, col.design$crossing.lab[i]))
+      labels.output = paste0(labels.output, sprintf("<th scope=\"col\"%s>%s</th>", htmlclass, HTMLencode(col.design$crossing.lab[i])))
       next
     }
     
@@ -314,7 +314,7 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
       }
     }
     
-    labels.output = paste0(labels.output, sprintf("<th scope=\"col\"%s>%s</th>", htmlclass, col.name))
+    labels.output = paste0(labels.output, sprintf("<th scope=\"col\"%s>%s</th>", htmlclass, HTMLencode(col.name)))
   }
   
   # samenvoegen tot een coherent geheel
@@ -327,8 +327,9 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
     intro_tekst$inhoud = str_replace_all(intro_tekst$inhoud, fixed("[naam]"), subset.name)
     
     # html voor titels en koppen toevoegen
-    intro_tekst$inhoud[intro_tekst$type == "titel"] = sprintf("<h1>%s</h1>", intro_tekst$inhoud[intro_tekst$type == "titel"])
-    intro_tekst$inhoud[intro_tekst$type == "kop"] = sprintf("<h2>%s</h2>", intro_tekst$inhoud[intro_tekst$type == "kop"]) 
+    intro_tekst$inhoud[intro_tekst$type == "titel"] = sprintf("<h1>%s</h1>", HTMLencode(intro_tekst$inhoud[intro_tekst$type == "titel"]))
+    intro_tekst$inhoud[intro_tekst$type == "kop"] = sprintf("<h2>%s</h2>", HTMLencode(intro_tekst$inhoud[intro_tekst$type == "kop"]))
+    intro_tekst$inhoud[intro_tekst$type != "titel" & intro_tekst$type != "kop"] = HTMLencode(intro_tekst$inhoud[intro_tekst$type != "titel" & intro_tekst$type != "kop"])
     # lege waarden worden geprint als NA; dat willen we niet
     intro_tekst$inhoud[is.na(intro_tekst$inhoud)] = ""
     
@@ -407,18 +408,18 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
       
       # opmaak toevoegen
       if (indeling_rijen$type[i] == "titel") {
-        output = sprintf("<h2 class=\"heading\" id=\"heading_%d\">%s</h2>\r\n", i, output)
+        output = sprintf("<h2 class=\"heading\" id=\"heading_%d\">%s</h2>\r\n", i, HTMLencode(output))
         # als de volgende regel geen kop of vraag is: extra witregel
         if (i < nrow(indeling_rijen) && !indeling_rijen$type[i+1] %in% c("kop", "vraag", "aantallen")) 
           output = paste0(output, "<br />\r\n")
       } else if (indeling_rijen$type[i] == "kop") {
-        question.cache = output
-        output = sprintf("<h3 class=\"heading\" id=\"heading_%d\">%s</h3>", i, output)
+        question.cache = HTMLencode(output)
+        output = sprintf("<h3 class=\"heading\" id=\"heading_%d\">%s</h3>", i, HTMLencode(output))
       } else if (indeling_rijen$type[i] == "vraag") {
-        question.cache = output
-        output = sprintf("<h3 class=\"heading vraag\" id=\"heading_%d\">%s</h3>", i, output)
+        question.cache = HTMLencode(output)
+        output = sprintf("<h3 class=\"heading vraag\" id=\"heading_%d\">%s</h3>", i, HTMLencode(output))
       } else { # tekst
-        output = sprintf("%s<br />", ifelse(is.na(output), "", output))
+        output = sprintf("%s<br />", ifelse(is.na(output), "", HTMLencode(output)))
       }
       
       table.output = c(table.output, paste0(output, "\r\n"))
@@ -622,7 +623,7 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
         
         # tabel invoegen
         #browser()
-        table.output = c(table.output, paste0("<h3 class=\"vraag\">", var_labels$label[var_labels$var == indeling_rijen$inhoud[i] & var_labels$val == "var"], "</h3>",
+        table.output = c(table.output, paste0("<h3 class=\"vraag\">", HTMLencode(var_labels$label[var_labels$var == indeling_rijen$inhoud[i] & var_labels$val == "var"]), "</h3>",
                                               "<table>\r\n",
                                               # titel van de vraag toevoegen
                                               "<caption>", var_labels$label[var_labels$var == indeling_rijen$inhoud[i] & var_labels$val == "var"], "</caption>\r\n",

@@ -12,7 +12,7 @@
 rm(list=ls())
 
 # benodigde packages installeren als deze afwezig zijn
-pkg_nodig = c("tidyverse", "survey", "haven", "this.path",
+pkg_nodig = c("tidyverse", "survey", "haven", "this.path", "textutils",
               "labelled", "openxlsx", "doParallel", "foreach", "knitr")
 
 for (pkg in pkg_nodig) {
@@ -25,6 +25,7 @@ suppressPackageStartupMessages(library(tidyverse))
 suppressPackageStartupMessages(library(survey))
 library(haven)
 library(this.path)
+library(textutils)
 library(labelled)
 library(openxlsx)
 suppressPackageStartupMessages(library(doParallel))
