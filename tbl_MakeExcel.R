@@ -557,21 +557,22 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
       next
     }
     
-    # totaalkolom - subset?
-    col.name = datasets$naam_dataset[col.design$dataset[i]]
-    if (!is.na(col.design$subset[i])) {
-      col.name = subset.name
-      if (col.design$subset[i] != subset) {
-        col.name = var_labels$label[var_labels$var == col.design$subset[i] & var_labels$val == subsetmatches[subsetmatches[,1] == subset.val, col.design$subset[i]]]
-        if (length(col.name) == 0) {
-          msg("Let op! Kolom %d (subsetvariabele %s) heeft geen passend label. Waarschijnlijk missen de labels in SPSS. Voor nu wordt hier '-' aangenomen.", i, col.design$subset[i], level=WARN)
-          col.name = "-"
+    if (!is.na(col.design$name[i])) {
+      col.name = col.design$name[i]
+      col.name = str_replace(str_replace(col.name, fixed("[naam]"), col.name), fixed("[jaar]"), ifelse(!is.na(col.design$year[i]), col.design$year[i], ""))
+    } else {
+      # geen naam opgegeven; zelf maken
+      col.name = datasets$naam_dataset[col.design$dataset[i]]
+      if (!is.na(col.design$subset[i])) {
+        col.name = subset.name
+        if (col.design$subset[i] != subset) {
+          col.name = var_labels$label[var_labels$var == col.design$subset[i] & var_labels$val == subsetmatches[subsetmatches[,1] == subset.val, col.design$subset[i]]]
         }
       }
+      
+      # tekstopmaak is in te stellen in de configuratie -> [naam] en [jaar] worden vervangen
+      col.name = str_replace(str_replace(design("header_template"), fixed("[naam]"), col.name), fixed("[jaar]"), ifelse(!is.na(col.design$year[i]), col.design$year[i], ""))
     }
-    
-    # tekstopmaak is in te stellen in de configuratie -> [naam] en [jaar] worden vervangen
-    col.name = str_replace(str_replace(design("header_template"), fixed("[naam]"), col.name), fixed("[jaar]"), ifelse(!is.na(col.design$year[i]), col.design$year[i], ""))
     
     # als er afkortingen zijn: deze toevoegen
     # deze kunnen normale tekst zijn, of een reguliere expressie (aangegeven met beginteken *)

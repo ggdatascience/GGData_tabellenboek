@@ -191,6 +191,7 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
   
   # moeten er kolommen verborgen worden?
   # let op: bij deze versie hoeft er geen rekening gehouden te worden met het verspringen van de significantieresultaten, omdat de kolommen vanzelf de juiste naam krijgen
+  col.design$n = 0
   for (j in 1:nrow(col.design)) {
     if (!is.na(col.design$subset[j])) {
       subset.col = subset.val
@@ -288,17 +289,24 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
       next
     }
     
-    # totaalkolom - subset?
-    col.name = datasets$naam_dataset[col.design$dataset[i]]
-    if (!is.na(col.design$subset[i])) {
-      col.name = subset.name
-      if (col.design$subset[i] != subset) {
-        col.name = var_labels$label[var_labels$var == col.design$subset[i] & var_labels$val == subsetmatches[subsetmatches[,1] == subset.val, col.design$subset[i]]]
+    # totaalkolom - naam genereren?
+    if (!is.na(col.design$name[i])) {
+      col.name = col.design$name[i]
+      col.name = str_replace(str_replace(col.name, fixed("[naam]"), col.name), fixed("[jaar]"), ifelse(!is.na(col.design$year[i]), col.design$year[i], ""))
+    } else {
+      # geen naam opgegeven; zelf maken
+      col.name = datasets$naam_dataset[col.design$dataset[i]]
+      if (!is.na(col.design$subset[i])) {
+        col.name = subset.name
+        if (col.design$subset[i] != subset) {
+          col.name = var_labels$label[var_labels$var == col.design$subset[i] & var_labels$val == subsetmatches[subsetmatches[,1] == subset.val, col.design$subset[i]]]
+        }
       }
+      
+      # tekstopmaak is in te stellen in de configuratie -> [naam] en [jaar] worden vervangen
+      col.name = str_replace(str_replace(design("header_template"), fixed("[naam]"), col.name), fixed("[jaar]"), ifelse(!is.na(col.design$year[i]), col.design$year[i], ""))
     }
     
-    # tekstopmaak is in te stellen in de configuratie -> [naam] en [jaar] worden vervangen
-    col.name = str_replace(str_replace(design("header_template"), fixed("[naam]"), col.name), fixed("[jaar]"), ifelse(!is.na(col.design$year[i]), col.design$year[i], ""))
     
     # als er afkortingen zijn: deze toevoegen
     # deze kunnen normale tekst zijn, of een reguliere expressie (aangegeven met beginteken *)

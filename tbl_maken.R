@@ -155,6 +155,11 @@ log.save = T
     onderdelen$sign_doelkolom[is.na(onderdelen$sign_doelkolom)] = F
   }
   
+  # en kolomnamen bij onderdelen
+  if (!"kolomnaam" %in% colnames(onderdelen)) {
+    onderdelen$kolomnaam = NA
+  }
+  
   # variabelelijst afleiden uit de indeling van het tabellenboek;
   # iedere regel met (n)var is een variabele die we nodig hebben
   varlist = indeling_rijen[indeling_rijen$type %in% c("var", "nvar"),]
@@ -496,7 +501,8 @@ log.save = T
     }
     
     kolom_opbouw = bind_rows(kolom_opbouw, data.frame(col.index=nrow(kolom_opbouw)+1, dataset=d, subset=onderdelen$subset[i], year=onderdelen$jaar[i],
-                                                      crossing=NA, crossing.val=NA, crossing.lab=NA, test.col=test.col, test.display=!onderdelen$sign_doelkolom[i]))
+                                                      crossing=NA, crossing.val=NA, crossing.lab=NA, test.col=test.col, test.display=!onderdelen$sign_doelkolom[i],
+                                                      name=onderdelen$kolomnaam[i]))
   }
   
   # moeten er nog testkolommen toegevoegd worden uit de cache?
@@ -608,10 +614,11 @@ log.save = T
     varlist.cmp = varlist %>% select(inhoud, starts_with("weeg"))
     varlist.prev.cmp = varlist.prev %>% select(inhoud, starts_with("weeg"))
     
-    # sign_doelkolom is nieuw; deze mag missen
-    kolom_opbouw.cmp = kolom_opbouw %>% select(-test.display)
+    # sign_doelkolom en kolomnaam zijn nieuw; deze mogen missen
+    kolom_opbouw.cmp = kolom_opbouw %>% select(col.index, dataset, subset, year, crossing, crossing.val, crossing.lab, test.col)
+    kolom_opbouw.prev.cmp = kolom_opbouw.prev %>% select(col.index, dataset, subset, year, crossing, crossing.val, crossing.lab, test.col)
     
-    if (identical.enough(kolom_opbouw.cmp, kolom_opbouw.prev) && identical.enough(varlist.cmp, varlist.prev.cmp)) {
+    if (identical.enough(kolom_opbouw.cmp, kolom_opbouw.prev.cmp) && identical.enough(varlist.cmp, varlist.prev.cmp)) {
       msg("Eerdere resultaten aangetroffen vanuit deze configuratie (%s). Berekening wordt overgeslagen. Indien er nieuwe data is toegevoegd, verwijder dan de bestanden uit de map resultaten_csv.",
           basename(config.file), level=MSG)
       
