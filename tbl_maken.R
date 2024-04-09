@@ -10,7 +10,7 @@
 
 # alle huidige data uit de sessie verwijderen
 rm(list=ls())
-
+label_problemen <- NULL
 # benodigde packages installeren als deze afwezig zijn
 pkg_nodig = c("tidyverse", "survey", "haven", "this.path", "textutils",
               "labelled", "openxlsx", "doParallel", "foreach", "knitr")
@@ -197,9 +197,18 @@ log.save = T
     msg("Inladen dataset %d: %s", d, datasets$naam_dataset[d], level=MSG)
     
     # zoek naar nieuw te maken datasets die een parent dataset hebben, geef ze alvast goed data path
-    splitted_naam_dataset <- strsplit(datasets$naam_dataset[d], "")[[1]]
-    if(splitted_naam_dataset[1] == "_"){
-      datasets$bestandsnaam[d] <- datasets$bestandsnaam[which(datasets$naam_dataset == paste(splitted_naam_dataset[-1], collapse = ""))]
+    #splitted_naam_dataset <- strsplit(datasets$naam_dataset[d], "")[[1]]
+    if(strsplit(datasets$naam_dataset[d], "")[[1]][1] == "_"){
+      is_filtered_dataset <- T
+      # Haal eigenschappen voor de gefilterde dataset uit de string
+      parent_dataset <- strsplit(datasets$naam_dataset[d], "_")[[1]][2]
+      parent_dataset_row <- which(datasets$naam_dataset == parent_dataset)
+      new_name <- strsplit(datasets$naam_dataset[d], "_")[[1]][3]
+      # sla de eigenschappen op
+      datasets$bestandsnaam[d] <- datasets$bestandsnaam[parent_dataset_row]
+      datasets$naam_dataset[d] <- new_name
+    } else {
+      is_filtered_dataset <- F
     }
     
     # .sav aan het einde kan vergeten worden...
@@ -224,8 +233,12 @@ log.save = T
     
     # als dit een dataset is met een parent dataset, voer hier de filtering uit.
     # deze filtering staat in
-    if(splitted_naam_dataset[1] == "_"){
+    if(is_filtered_dataset){
       data <- data %>% filter(!!rlang::parse_expr(datasets$filter[d]))
+      cat(" dit is een gefilterde dataset met filter", datasets$filter[d], "op dataset", parent_dataset, ". Nieuwe naam is", new_name, "\n")
+      if(nrow(data) == 0){
+        msg("Dit filter resulteert in een lege dataset", level=ERR)
+      }
     }
     
     # afwijkende kolommen registreren zodat we deze later kunnen scheiden
@@ -258,7 +271,8 @@ log.save = T
           }
         } else if (desired == "character") {
           if (typeof(data[[c]]) != "character")
-            var_label = var_label(data[[c]])
+            print(c)
+          var_label = var_label(data[[c]])
           data[[c]] = to_character(data[[c]])
           var_label(data[[c]]) = var_label
         }
@@ -311,6 +325,15 @@ log.save = T
           msg("Antwoordopties voor variabele %s komen niet overeen tussen datasets. In dataset %s zijn %d optie(s) aanwezig (%s), in de datasets daarvoor %d (%s). Deze waardes worden gecombineerd met de eerder bekende labels als leidraad.",
               colname, datasets$naam_dataset[d], length(val_labels(data[[c]])), str_c(names(val_labels(data[[c]])), collapse=", "),
               length(val_labels(existing)), str_c(names(val_labels(existing)), collapse=", "), level=WARN)
+          label_problemen <- bind_rows(
+            label_problemen,
+            data.frame(
+              kolom=colname,
+              nieuwe_dataset=datasets$naam_dataset[d],
+              nieuwe_labels=paste0(val_labels(data[[c]]), collapse = ";"),
+              oude_labels=paste0(val_labels(existing), collapse = ";")
+            )
+          )
         }
         
         # let op: warnings negeren is niet heel netjes, maar direct hierboven is met een if gecontroleerd of het aantal afwijkt
@@ -653,10 +676,10 @@ log.save = T
       results = data.frame()
       
       PrepdataForSurveyAndGetTableRow = function(
-      var,
-      data.in,
-      kolom_opbouw.in,
-      subsetmatches.in
+    var,
+    data.in,
+    kolom_opbouw.in,
+    subsetmatches.in
       ){
         source("tbl_GetTableRow.R")
         source("tbl_helpers.R")
@@ -742,7 +765,7 @@ log.save = T
         }
         
         design = svydesign(ids=~1, strata=data.tmp$superstrata, weights=data.tmp$superweegfactor, data=data.tmp)
-
+        
         results = bind_rows(results, GetTableRow(var, design, kolom_opbouw, subsetmatches, F))
       }
       t.end = proc.time()["elapsed"]
