@@ -9,7 +9,7 @@
 #
 
 # alle huidige data uit de sessie verwijderen
-rm(list=ls())
+rm(list=ls()[!ls() %in%  c("skip_config_popup", "config.file")])
 label_problemen <- NULL
 # benodigde packages installeren als deze afwezig zijn
 pkg_nodig = c("tidyverse", "survey", "haven", "this.path", "textutils",
@@ -49,9 +49,14 @@ log.save = T
   # selecteren configuratiebestand en bijbehorende werkmap
   # hierin dienen de configuratie(.xlsx) en de databestanden (in de map data) te staan
   # andere mappen worden automatisch aangemaakt als deze niet bestaan
-  config.file = choose.files(caption="Selecteer configuratiebestand...",
-                             filters=c("Excel-bestand (*.xlsx)","*.xlsx"),
-                             multi=F)
+  if(!exists("skip_config_popup") || !skip_config_popup){
+    config.file = choose.files(caption="Selecteer configuratiebestand...",
+                               filters=c("Excel-bestand (*.xlsx)","*.xlsx"),
+                               multi=F)    
+  } else {
+    msg("er wordt een configuratiebestand gebruikt wat buiten tbl_maken.R is gedefinieerd:", config.file)
+  }
+
   #config.file = "configuratieVO.xlsx"
   if (!str_ends(config.file, ".xlsx")) msg("Configuratiebestand dient een Excel-bestand te zijn.", ERR)
   setwd(dirname(config.file))
