@@ -10,7 +10,7 @@
 
             html {
                 font-family: "[font_type]";
-                font-size: [font_size];
+                font-size: [font_size]pt;
                 color: [font_color];
             }
 
@@ -36,10 +36,24 @@
                 position: absolute;
                 right: 25px;
             }
-        
+
             table {
                 width: 100%;
                 border-collapse: collapse;
+                table-layout: fixed;
+            }
+
+            colgroup col:first-of-type {
+                width: 300px;
+            }
+
+            th[scope='col'] {
+                word-break:break-word;
+            }
+
+            th[scope='row'] {
+                text-align: left;
+                font-weight: normal;
             }
             
             tbody tr th {
@@ -49,7 +63,6 @@
             }
             
             tbody tr td {
-                min-width: 5%;
                 text-align: center;
             }
             
@@ -58,7 +71,7 @@
             }
 
             h2 {
-                font-size: [titel_size];
+                font-size: [titel_size]pt;
                 color: [titel_color];
                 background-color: [titel_fill];
                 [titel_decoration]
@@ -66,7 +79,7 @@
             }
 
             h3 {
-                font-size: [kop_size];
+                font-size: [kop_size]pt;
                 color: [kop_color];
                 background-color: [kop_fill];
                 [kop_decoration]
@@ -74,7 +87,7 @@
             }
 
             .vraag {
-                font-size: [vraag_size];
+                font-size: [vraag_size]pt;
                 color: [vraag_color];
                 background-color: [vraag_fill];
                 [vraag_decoration];
