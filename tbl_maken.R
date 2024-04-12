@@ -50,7 +50,6 @@ log.save = T
   # hierin dienen de configuratie(.xlsx) en de databestanden (in de map data) te staan
   # andere mappen worden automatisch aangemaakt als deze niet bestaan
   if(!exists("skip_config_popup") || !skip_config_popup){
-    message(1111)
     config.file = choose.files(caption="Selecteer configuratiebestand...",
                                filters=c("Excel-bestand (*.xlsx)","*.xlsx"),
                                multi=F)    
