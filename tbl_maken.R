@@ -103,6 +103,8 @@ log.save = T
   }
   rm(tmp)
   
+  msg("Start verwerking configuratiebestand %s...", config.file, level=MSG)
+  
   # controleren of nieuw toegevoegde opties ook zijn ingevuld
   # uiteindelijk zal dit verwijderd worden, maar voor nu is een overgangsperiode wel fijn
   if (!("vraag_verbergen_bij_missend_antwoord" %in% colnames(algemeen) && "afkapwaarde_antwoord" %in% colnames(algemeen))) {
@@ -187,8 +189,6 @@ log.save = T
     msg("De variabele(n) %s is/zijn ingevuld als crossing en variabele in indeling_rijen. Een variabele kan niet met zichzelf gekruist worden.",
         str_c(crossings[crossings %in% varlist$inhoud], ", "), level=WARN)
   }
-  
-  msg("Start verwerking configuratiebestand %s...", config.file, level=MSG)
   
   # datasets combineren en de strata en weegfactoren apart opslaan
   data.combined = data.frame()
@@ -909,7 +909,10 @@ log.save = T
       MakeHtml(results, var_labels, kolom_opbouw, NA, NA, subsetmatches, n_resp, template_html)
     } else {
       # wel subsets, meerdere tabellenboeken
-      subsetvals = subsetmatches[,1]
+      subsetvals = subsetmatches[, 1]
+      # bij een subset met slechts 1 niveau valt de naam weg bij de bovenstaande selectie
+      # om dit te voorkomen voegen we 'm zelf nog een keer toe
+      names(subsetvals) = rownames(subsetmatches)
       for (s in 1:length(subsetvals)) {
         if (sum(results$subset == colnames(subsetmatches)[1] & results$subset.val == subsetvals[s], na.rm=T) < 1)
           next # geen data gevonden voor deze subset, overslaan
@@ -928,7 +931,8 @@ log.save = T
     MakeExcel(results, var_labels, kolom_opbouw, NA, NA, subsetmatches, n_resp)
   } else {
     # wel subsets, meerdere tabellenboeken
-    subsetvals = subsetmatches[,1]
+    subsetvals = subsetmatches[, 1]
+    names(subsetvals) = rownames(subsetmatches)
     for (s in 1:length(subsetvals)) {
       if (sum(results$subset == colnames(subsetmatches)[1] & results$subset.val == subsetvals[s], na.rm=T) < 1)
         next # geen data gevonden voor deze subset, overslaan

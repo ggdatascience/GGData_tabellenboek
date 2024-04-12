@@ -43,7 +43,8 @@ opmaak.default = read.table(text='"type" "waarde"
 "22" "crossing_headers_kleiner" "TRUE"
 "23" "label_max_lengte" "66"
 "24" "naam_tabellenboek" "Overzicht"
-"25" "verberg_lege_kolommen" "FALSE"')
+"25" "verberg_lege_kolommen_totaal" "FALSE"
+"26" "verberg_lege_kolommen_crossing" "FALSE"')
 
 design = function (var) {
   if (str_length(var) <= 1) {
@@ -116,17 +117,20 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
     col.design$n[j] = n
   } 
   hide.cols = c()
-  if (design("verberg_lege_kolommen")) {
-    hide.cols = col.design$col.index[col.design$n == 0]
-    if (length(hide.cols) > 0) {
-      # achterstevoren, zodat we steeds makkelijk -1 kunnen doen
-      sign.replacement = sign.replacement[order(sign.replacement$old, decreasing=T),]
-      for (i in hide.cols) {
-        sign.replacement$old[sign.replacement$old >= i] = sign.replacement$old[sign.replacement$old >= i] - 1
-        sign.replacement$new[sign.replacement$new >= i] = sign.replacement$new[sign.replacement$new >= i] - 1
-      }
-      col.design = col.design[-which(col.design$col.index %in% hide.cols),]
+  if (design("verberg_lege_kolommen_totaal")) {
+    hide.cols = c(hide.cols, col.design$col.index[col.design$n == 0 & is.na(col.design$crossing)])
+  }
+  if (design("verberg_lege_kolommen_crossing")) {
+    hide.cols = c(hide.cols, col.design$col.index[col.design$n == 0 & !is.na(col.design$crossing)])
+  }
+  if (length(hide.cols) > 0) {
+    # achterstevoren, zodat we steeds makkelijk -1 kunnen doen
+    sign.replacement = sign.replacement[order(sign.replacement$old, decreasing=T),]
+    for (i in hide.cols) {
+      sign.replacement$old[sign.replacement$old >= i] = sign.replacement$old[sign.replacement$old >= i] - 1
+      sign.replacement$new[sign.replacement$new >= i] = sign.replacement$new[sign.replacement$new >= i] - 1
     }
+    col.design = col.design[-which(col.design$col.index %in% hide.cols),]
   }
   
   wb = createWorkbook(creator="GGData Tabellenboek")
