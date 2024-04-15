@@ -647,14 +647,20 @@ log.save = T
     kolom_opbouw.prev.cmp = kolom_opbouw.prev %>% select(col.index, dataset, subset, year, crossing, crossing.val, crossing.lab, test.col)
     
     if (identical.enough(kolom_opbouw.cmp, kolom_opbouw.prev.cmp) && identical.enough(varlist.cmp, varlist.prev.cmp)) {
-      msg("Eerdere resultaten aangetroffen vanuit deze configuratie (%s). Berekening wordt overgeslagen. Indien er nieuwe data is toegevoegd, verwijder dan de bestanden uit de map resultaten_csv.",
-          basename(config.file), level=MSG)
-      
-      calc.results = F
-      # aangezien een tweede subset vaker kan draaien moeten we hier een distinct op doen - deze is tijdelijk nodig door een ontwerpfoutje
-      # deze functie werd eerst meerdere keren aangeroepen in tbl_MakeExcel, wat natuurlijk veel meer resources kost
-      # helaas zijn de resultaten die inmiddels opgeslagen zijn wel volgens de oude manier berekend, dus moeten we de correctie voor de zekerheid uitvoeren
-      results = results %>% distinct()
+      if(!is.null(algemeen$forceer_berekening) && forceer_berekening){
+        msg("Eerdere resultaten aangetroffen vanuit deze configuratie (%s). Deze zullen opnieuw worden gegenereerd omdat de optie forceer_berekening in tabblad algemeen WAAR is.",
+            basename(config.file), level=MSG)
+      } else {
+        msg("Eerdere resultaten aangetroffen vanuit deze configuratie (%s). Berekening wordt overgeslagen. Indien er nieuwe data is toegevoegd, verwijder dan de bestanden uit de map resultaten_csv.",
+            basename(config.file), level=MSG)
+        
+        calc.results = F
+        # aangezien een tweede subset vaker kan draaien moeten we hier een distinct op doen - deze is tijdelijk nodig door een ontwerpfoutje
+        # deze functie werd eerst meerdere keren aangeroepen in tbl_MakeExcel, wat natuurlijk veel meer resources kost
+        # helaas zijn de resultaten die inmiddels opgeslagen zijn wel volgens de oude manier berekend, dus moeten we de correctie voor de zekerheid uitvoeren
+        results = results %>% distinct()
+      }
+  
     } else {
       msg("Er zijn eerdere resultaten aangetroffen vanuit deze configuratie (%s), maar de instellingen waren niet identiek. Berekening wordt opnieuw uitgevoerd.", basename(config.file), level=MSG)
     }
