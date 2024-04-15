@@ -647,7 +647,7 @@ log.save = T
     kolom_opbouw.prev.cmp = kolom_opbouw.prev %>% select(col.index, dataset, subset, year, crossing, crossing.val, crossing.lab, test.col)
     
     if (identical.enough(kolom_opbouw.cmp, kolom_opbouw.prev.cmp) && identical.enough(varlist.cmp, varlist.prev.cmp)) {
-      if(!is.null(algemeen$forceer_berekening) && forceer_berekening){
+      if("forceer_berekening" %in% colnames(algemeen) && algemeen$forceer_berekening){
         msg("Eerdere resultaten aangetroffen vanuit deze configuratie (%s). Deze zullen opnieuw worden gegenereerd omdat de optie forceer_berekening in tabblad algemeen WAAR is.",
             basename(config.file), level=MSG)
       } else {
