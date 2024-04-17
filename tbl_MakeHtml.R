@@ -519,7 +519,7 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
         # N.B.: as.character() is hier nodig omdat R niet om kan gaan met een numerieke rijnaam 0, maar wel met karakter "0"
         vals = as.character(data.var$val[data.var$col.index == col.design$col.index[j] & data.var$val %in% rownames(output)])
         output[vals,j] = data.var$perc.weighted[data.var$col.index == col.design$col.index[j] & data.var$val %in% rownames(output)]
-        if ("weergave" %in% algemeen && algemeen$weergave == "n")
+        if (!is.null(algemeen$weergave) && algemeen$weergave == "n")
           output[vals,j] = data.var$n[data.var$col.index == col.design$col.index[j] & data.var$val %in% rownames(output)]
         
         # waarden onder de afkapgrens vervangen
