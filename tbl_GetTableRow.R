@@ -72,7 +72,7 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
   # splitsen op subset?
   if (!is.null(subsetmatches)) {
     leadingsubset = colnames(subsetmatches)[1]
-    leadingcol = min(col.design$col.index[which(!is.na(col.design$subset))[1]])
+    leadingcol = min(col.design$col.index[which(col.design$subset == leadingsubset & is.na(col.design$crossing))])
     
     subsetvals = subsetmatches[,1]
     

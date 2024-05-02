@@ -332,11 +332,17 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
   # samenvoegen tot een coherent geheel
   header.output = paste0(cols.output, "<thead>\r\n", labels.output, "</thead>\r\n")
   perc.row.output = paste0(perc.row.output, "</tr>\r\n")
-  
+
   # moet er introtekst bij?
   if (nrow(intro_tekst) > 0) {
     intro_tekst$type = str_to_lower(str_trim(intro_tekst$type))
     intro_tekst$inhoud = str_replace_all(intro_tekst$inhoud, fixed("[naam]"), subset.name)
+    # indien gesplistst per subset: andere subsets ook vervangen?
+    if (subset.name != design("naam_tabellenboek") && ncol(subsetmatches) > 1) {
+      for (i in 1:ncol(subsetmatches)) {
+        intro_tekst$inhoud = str_replace_all(intro_tekst$inhoud, fixed(paste0("[", colnames(subsetmatches)[i], "]")), var_labels$label[var_labels$var == colnames(subsetmatches)[i] & var_labels$val == subsetmatches[subset.name,i]])
+      }
+    }
     
     # html voor titels en koppen toevoegen
     intro_tekst$inhoud[intro_tekst$type == "titel"] = sprintf("<h1>%s</h1>", HTMLencode(intro_tekst$inhoud[intro_tekst$type == "titel"]))
@@ -372,18 +378,20 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
       # insertImage(wb, subset.name, file=logos$bestand[i], width=logos$breedte[i], height=logos$hoogte[i], units="px",
       #             startRow=rij, startCol=kolom)
       
-      base_img = sprintf("<img src=\"%s\"%s width=\"%d\" height=\"%d\">",
+      base_img = sprintf("<img src=\"%s\"%s>",
                          image_uri(logos$bestand[i]),
-                         ifelse(!is.na(logos$id[i]), paste0(" id=\"logo_", logos$id[i], "\""), ""),
-                         logos$breedte[i], logos$hoogte[i])
+                         ifelse(!is.na(logos$id[i]), paste0(" id=\"logo_", logos$id[i], "\""), ""))
       
-      if ("id" %in% colnames(logos) && !is.na(logos$id[i]) && str_detect(template, fixed(sprintf("{logo %s}", logos$id[i])))) {
+      if (!is.na(logos$id[i]) && str_detect(template, fixed(sprintf("{logo %s}", logos$id[i])))) {
         template = str_replace(template, fixed(sprintf("{logo %s}", logos$id[i])), base_img)
+      } else {
+        img = c(img, base_img)
       }
-      img = c(img, base_img)
     }
     
     template = str_replace(template, fixed("{logo}"), str_c(img, collapse="\n\n"))
+    # het kan zijn dat {logo} in de introtekst staat, dan worden de brackets omgezet
+    template = str_replace(template, fixed("&lbrace;logo&rbrace;"), str_c(img, collapse="\n\n"))
   }
   
   indeling_rijen$type = str_to_lower(str_trim(indeling_rijen$type))

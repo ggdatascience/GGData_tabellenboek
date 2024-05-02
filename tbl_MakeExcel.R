@@ -178,7 +178,15 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
   # moet er introtekst bij?
   if (nrow(intro_tekst) > 0) {
     intro_tekst$type = str_to_lower(str_trim(intro_tekst$type))
+    # in de digitoegankelijke versie is het soms wenselijk om het logo te plaatsen in de tekst, maar binnen Excel heeft dit geen functie; verwijderen
+    intro_tekst$inhoud = str_replace_all(intro_tekst$inhoud, fixed("{logo}"), "")
     intro_tekst$inhoud = str_replace_all(intro_tekst$inhoud, fixed("[naam]"), subset.name.full)
+    # indien gesplistst per subset: andere subsets ook vervangen?
+    if (subset.name.full != design("naam_tabellenboek") && ncol(subsetmatches) > 1) {
+      for (i in 1:ncol(subsetmatches)) {
+        intro_tekst$inhoud = str_replace_all(intro_tekst$inhoud, fixed(paste0("[", colnames(subsetmatches)[i], "]")), var_labels$label[var_labels$var == colnames(subsetmatches)[i] & var_labels$val == subsetmatches[subset.name.full, i]])
+      }
+    }
     for (i in 1:nrow(intro_tekst)) {
       output = data.frame(a=intro_tekst$type[i], b=intro_tekst$inhoud[i])
       writeData(wb, subset.name, output, startCol=1, startRow=c, colNames=F)

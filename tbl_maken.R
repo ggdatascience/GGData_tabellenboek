@@ -167,6 +167,11 @@ log.save = F
     onderdelen$kolomnaam = NA
   }
   
+  # idem voor id bij logos
+  if (!"id" %in% colnames(logos)) {
+    logos$id = NA
+  }
+  
   # variabelelijst afleiden uit de indeling van het tabellenboek;
   # iedere regel met (n)var is een variabele die we nodig hebben
   varlist = indeling_rijen[indeling_rijen$type %in% c("var", "nvar"),]
