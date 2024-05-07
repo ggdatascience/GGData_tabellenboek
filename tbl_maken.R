@@ -208,7 +208,7 @@ log.save = F
     
     # zoek naar nieuw te maken datasets die een parent dataset hebben, geef ze alvast goed data path
     #splitted_naam_dataset <- strsplit(datasets$naam_dataset[d], "")[[1]]
-    if(strsplit(datasets$naam_dataset[d], "")[[1]][1] == "_"){
+    if(!is.numeric(datasets$naam_dataset[d]) && strsplit(datasets$naam_dataset[d], "")[[1]][1] == "_"){
       is_filtered_dataset <- T
       # Haal eigenschappen voor de gefilterde dataset uit de string
       parent_dataset <- strsplit(datasets$naam_dataset[d], "_")[[1]][2]
