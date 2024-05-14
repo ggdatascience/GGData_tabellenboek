@@ -154,6 +154,12 @@ log.save = F
     msg("Er is geen kolom met de naam 'sign_hovertekst' aanwezig in algemeen. Standaardinstelling (\"Deze waarde is significant anders.\") wordt aangenomen.", level=WARN)
   }
   
+  # idem voor sign_verbergen_wanneer_afgerond_gelijk
+  if (!"sign_verbergen_wanneer_afgerond_gelijk" %in% colnames(algemeen)) {
+    algemeen$sign_verbergen_wanneer_afgerond_gelijk = F
+    msg("Er is geen kolom met de naam 'sign_verbergen_wanneer_afgerond_gelijk' aanwezig in algemeen. Standaardinstelling (ONWAAR) wordt aangenomen.", level=WARN)
+  }
+  
   # en sign_doelkolom bij onderdelen
   if (!"sign_doelkolom" %in% colnames(onderdelen)) {
     onderdelen$sign_doelkolom = F

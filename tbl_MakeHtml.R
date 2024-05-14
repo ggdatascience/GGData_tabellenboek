@@ -565,7 +565,18 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
       }
       
       # significante resultaten zichtbaar maken
-      sign = data.var[which(data.var$sign < algemeen$confidence_level), c("val", "col.index")]
+      sign = data.var[which(data.var$sign < algemeen$confidence_level), c("val", "col.index", "sign.vs", "perc.weighted")]
+      # resultaten verbergen als ze afgerond hetzelfde zijn?
+      if (algemeen$sign_verbergen_wanneer_afgerond_gelijk && nrow(sign) > 0) {
+        sign.vs = lapply(1:nrow(sign), \(x) data.var[which(data.var$col.index == sign$sign.vs[x] & data.var$val == sign$val[x]), c("val", "col.index", "perc.weighted")]) %>%
+          bind_rows() %>%
+          rename(perc.vs=perc.weighted) %>%
+          distinct()
+        sign = sign %>%
+          left_join(sign.vs, by=c("val", "sign.vs"="col.index")) %>%
+          filter(round(perc.weighted) != round(perc.vs) | is.na(perc.vs))
+      }
+      
       # kolomgetal vervangen, indien nodig
       if (nrow(sign.replacement) > 0) {
         for (j in 1:nrow(sign.replacement)) {
