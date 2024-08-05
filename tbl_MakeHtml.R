@@ -653,7 +653,6 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
         }
         
         # tabel invoegen
-        #browser()
         table.output = c(table.output, paste0("<h3 class=\"vraag\">", HTMLencode(var_labels$label[var_labels$var == indeling_rijen$inhoud[i] & var_labels$val == "var"]), "</h3>",
                                               "<table>\r\n",
                                               # titel van de vraag toevoegen
