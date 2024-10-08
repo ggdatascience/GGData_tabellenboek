@@ -534,7 +534,9 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
         
         #PS:
         #Metingen die o.b.v te lage aantallen zijn vervangen 
-        if (sum(data.var$n.unweighted[data.var$col.index == col.design$col.index[j]], na.rm=T) == 0) {
+        if (!is.na(indeling_rijen$verberg_crossings[i]) && !is.na(col.design$crossing[j])) {
+          output[,j] = Q_MISSING
+        } else if (sum(data.var$n.unweighted[data.var$col.index == col.design$col.index[j]], na.rm=T) == 0) {
           output[,j] = Q_MISSING
         } else if (sum(data.var$n.unweighted[data.var$col.index == col.design$col.index[j]], na.rm=T) < algemeen$min_observaties_per_vraag) {
           #Alle percentages wegstrepen als aantallen per groep te klein zijn.

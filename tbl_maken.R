@@ -178,6 +178,11 @@ log.save = F
     logos$id = NA
   }
   
+  # en verberg_crossings bij indeling_rijen
+  if (!"verberg_crossings" %in% colnames(indeling_rijen)) {
+    indeling_rijen$verberg_crossings = NA
+  }
+  
   # variabelelijst afleiden uit de indeling van het tabellenboek;
   # iedere regel met (n)var is een variabele die we nodig hebben
   varlist = indeling_rijen[indeling_rijen$type %in% c("var", "nvar"),]
