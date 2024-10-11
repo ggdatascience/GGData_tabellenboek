@@ -9,7 +9,9 @@
 #
 
 # alle huidige data uit de sessie verwijderen
-rm(list=ls()[!ls() %in%  c("skip_config_popup", "config.file")])
+if(!(exists("skip_config_popup") && skip_config_popup)){
+  rm(list=ls()[!ls() %in%  c("skip_config_popup", "config.file")])
+} 
 label_problemen <- NULL
 # benodigde packages installeren als deze afwezig zijn
 pkg_nodig = c("tidyverse", "survey", "haven", "this.path", "textutils",
@@ -56,7 +58,7 @@ log.save = F
   } else {
     msg("er wordt een configuratiebestand gebruikt wat buiten tbl_maken.R is gedefinieerd:", config.file)
   }
-
+  
   #config.file = "configuratieVO.xlsx"
   if (!str_ends(config.file, ".xlsx")) msg("Configuratiebestand dient een Excel-bestand te zijn.", ERR)
   setwd(dirname(config.file))
@@ -124,8 +126,10 @@ log.save = F
   if (!is.na(algemeen$template_html)) {
     # in de configuratie mag {script}/ staan, deze vervangen door pad van het script
     algemeen$template_html = str_replace(algemeen$template_html, fixed("{script}"), dirname(this.path()))
-    if (!file.exists(algemeen$template_html))
+    if (!file.exists(algemeen$template_html)){
       msg("Het templatebestand voor digitoegankelijke tabellenboeken is niet gevonden. Controleer de configuratie: tabblad algemeen, kolom template_html.", algemeen$template_html, level=ERR)
+    }
+    
   }
   
   # sanity checks op indeling_rijen
@@ -715,7 +719,7 @@ log.save = F
         # helaas zijn de resultaten die inmiddels opgeslagen zijn wel volgens de oude manier berekend, dus moeten we de correctie voor de zekerheid uitvoeren
         results = results %>% distinct()
       }
-  
+      
     } else {
       msg("Er zijn eerdere resultaten aangetroffen vanuit deze configuratie (%s), maar de instellingen waren niet identiek. Berekening wordt opnieuw uitgevoerd.", basename(config.file), level=MSG)
     }
@@ -952,6 +956,7 @@ log.save = F
       }
     }
   }
+  
   
   # uitdraaien tabellenboeken
   source(paste0(dirname(this.path()), "/tbl_MakeExcel.R"))
