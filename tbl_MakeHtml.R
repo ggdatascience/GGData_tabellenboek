@@ -381,8 +381,9 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
                          image_uri(logos$bestand[i]),
                          ifelse(!is.na(logos$id[i]), paste0(" id=\"logo_", logos$id[i], "\""), ""))
       
-      if (!is.na(logos$id[i]) && str_detect(template, fixed(sprintf("{logo %s}", logos$id[i])))) {
+      if (!is.na(logos$id[i]) && (str_detect(template, fixed(sprintf("{logo %s}", logos$id[i]))) || str_detect(template, fixed(sprintf("&lbrace;logo %s&rbrace;", logos$id[i]))))) {
         template = str_replace(template, fixed(sprintf("{logo %s}", logos$id[i])), base_img)
+        template = str_replace(template, fixed(sprintf("&lbrace;logo %s&rbrace;", logos$id[i])), base_img)
       } else {
         img = c(img, base_img)
       }
