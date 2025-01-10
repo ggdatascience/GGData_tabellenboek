@@ -205,6 +205,17 @@ log.save = F
       return(output[!is.na(output)])
     }) %>% unlist() %>% unname()
   
+  # in de sheet 'crossings' zijn twee kolommen: varname van crossing, en 
+  # boolean voor toetsen van deze crossing. We splitsen deze voor backward compatability
+  is.null(colnames(crossings)){
+    crossings_toetsen <- rep(T, length(crossings))
+  } else {
+    crossings_toetsen <- crossings$toetsen
+  }
+  crossings <- crossings$crossing
+  names(crossings_toetsen) <- crossings
+  
+  
   if (any(crossings %in% onderdelen$subset)) {
     msg("De variabele(n) %s is/zijn ingevuld als crossing en subset. Een subset kan niet met zichzelf gekruist worden.",
         str_c(crossings[crossings %in% onderdelen$subset], ", "), level=WARN)
@@ -550,7 +561,7 @@ log.save = F
       if (algemeen$sign_toetsen && !is.na(onderdelen$sign_crossing[i])) {
         # uitzoeken welke kolom tegenhanger moet zijn van de chi square
         if (onderdelen$sign_crossing[i] == "intern") {
-          test.col = 0 # 0 betekent andere waarden van de crossing
+          test.col = 0 # 0 toetsen met  andere waarden van de crossing, als waarde toetsen in sheet crossings != FALSE
         } else {
           # geen toets
           test.col = NA
