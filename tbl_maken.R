@@ -205,17 +205,21 @@ log.save = F
       return(output[!is.na(output)])
     }) %>% unlist() %>% unname()
   
-  # in de sheet 'crossings' zijn twee kolommen: varname van crossing, en 
+  # in de sheet 'crossings' zijn twee mogelijke kolommen: varname van crossing, en 
   # boolean voor toetsen van deze crossing. We splitsen deze voor backward compatability
-  if(is.null(colnames(crossings))){
+  if(length(crossings) == 0){ # scenario 1: een sheet met alleen 'crossings' in A1 (default)
+    crossings_toetsen <- NULL
+  } else if(is.null(colnames(crossings))){ # scenario 2: een sheet met 'crossings' in A1 en daaronder varnames
     crossings_toetsen <- rep(T, length(crossings))
-  } else {
+    names(crossings_toetsen) <- crossings
+  } else if("toetsen" %in% colnames(crossings)){ # scenario 3: een sheet met 'crossings' in A1 en daaronder varnames en 'toetsen' in B1 en daaronder lijst met booleans
     crossings_toetsen <- crossings$toetsen
+    crossings <- crossings$crossing
+    names(crossings_toetsen) <- crossings
+  } else{
+    msg("Geen kloppend tabblad crossings. Standaard is 'crossings' in cel A1 en verder een lege sheet. Voor meer informatie zie documentatie.", level=ERR)
   }
-  crossings <- crossings$crossing
-  names(crossings_toetsen) <- crossings
-  
-  
+
   if (any(crossings %in% onderdelen$subset)) {
     msg("De variabele(n) %s is/zijn ingevuld als crossing en subset. Een subset kan niet met zichzelf gekruist worden.",
         str_c(crossings[crossings %in% onderdelen$subset], ", "), level=WARN)
