@@ -207,7 +207,7 @@ log.save = F
   
   # in de sheet 'crossings' zijn twee kolommen: varname van crossing, en 
   # boolean voor toetsen van deze crossing. We splitsen deze voor backward compatability
-  is.null(colnames(crossings)){
+  if(is.null(colnames(crossings))){
     crossings_toetsen <- rep(T, length(crossings))
   } else {
     crossings_toetsen <- crossings$toetsen
