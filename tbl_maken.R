@@ -217,7 +217,7 @@ log.save = F
     crossings <- crossings$crossing
     names(crossings_toetsen) <- crossings
   } else{
-    msg("Geen kloppend tabblad crossings. Standaard is 'crossings' in cel A1 en verder een lege sheet. Voor meer informatie zie documentatie.", level=ERR)
+    msg("Geen kloppend tabblad crossings. Deze moet bestaan uit één of twee kolommen; crossings en (optioneel) toetsen. Standaard is 'crossings' in cel A1 en verder een lege sheet. Voor meer informatie zie documentatie.", level=ERR)
   }
 
   if (any(crossings %in% onderdelen$subset)) {
