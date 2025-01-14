@@ -205,6 +205,21 @@ log.save = F
       return(output[!is.na(output)])
     }) %>% unlist() %>% unname()
   
+  # in de sheet 'crossings' zijn twee mogelijke kolommen: varname van crossing, en 
+  # boolean voor toetsen van deze crossing. We splitsen deze voor backward compatability
+  if(length(crossings) == 0){ # scenario 1: een sheet met alleen 'crossings' in A1 (default)
+    crossings_toetsen <- NULL
+  } else if(is.null(colnames(crossings))){ # scenario 2: een sheet met 'crossings' in A1 en daaronder varnames
+    crossings_toetsen <- rep(T, length(crossings))
+    names(crossings_toetsen) <- crossings
+  } else if("toetsen" %in% colnames(crossings)){ # scenario 3: een sheet met 'crossings' in A1 en daaronder varnames en 'toetsen' in B1 en daaronder lijst met booleans
+    crossings_toetsen <- crossings$toetsen
+    crossings <- crossings$crossing
+    names(crossings_toetsen) <- crossings
+  } else{
+    msg("Geen kloppend tabblad crossings. Deze moet bestaan uit één of twee kolommen; crossings en (optioneel) toetsen. Standaard is 'crossings' in cel A1 en verder een lege sheet. Voor meer informatie zie documentatie.", level=ERR)
+  }
+
   if (any(crossings %in% onderdelen$subset)) {
     msg("De variabele(n) %s is/zijn ingevuld als crossing en subset. Een subset kan niet met zichzelf gekruist worden.",
         str_c(crossings[crossings %in% onderdelen$subset], ", "), level=WARN)
@@ -550,7 +565,7 @@ log.save = F
       if (algemeen$sign_toetsen && !is.na(onderdelen$sign_crossing[i])) {
         # uitzoeken welke kolom tegenhanger moet zijn van de chi square
         if (onderdelen$sign_crossing[i] == "intern") {
-          test.col = 0 # 0 betekent andere waarden van de crossing
+          test.col = 0 # 0 = toetsen met andere waarden van de crossing, als waarde toetsen in sheet crossings != FALSE
         } else {
           # geen toets
           test.col = NA
@@ -562,10 +577,16 @@ log.save = F
       for (crossing in crossings) {
         crossing.labels = var_labels[var_labels$var == crossing & var_labels$val != "var",]
         n = nrow(crossing.labels)
+        
+        test.col.current = test.col
+        if (!crossings_toetsen[crossing]) {
+          test.col.current = NA
+        }
+        
         kolom_opbouw = bind_rows(kolom_opbouw, data.frame(col.index=nrow(kolom_opbouw)+(1:n), dataset=rep(d, n),
                                                           subset=rep(onderdelen$subset[i], n), year=rep(onderdelen$jaar[i], n),
                                                           crossing=rep(crossing, n), crossing.val=as.numeric(crossing.labels$val),
-                                                          crossing.lab=crossing.labels$label, test.col=rep(test.col, n), test.display=T))
+                                                          crossing.lab=crossing.labels$label, test.col=rep(test.col.current, n), test.display=T))
       }
     }
     
