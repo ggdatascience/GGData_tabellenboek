@@ -44,7 +44,7 @@ source("tbl_helpers.R")
 # in het dagelijks gebruik is MSG ruim voldoende, zet DEBUG alleen aan bij het doorgeven van foutmeldingen aan de werkgroep
 log.level = DEBUG
 # log opslaan naar een tekstbestand?
-log.save = F
+log.save = T
 
 # het gehele script wordt omgeven door curly brackets, zodat een stop() ook daadwerkelijk het script stopt
 {
