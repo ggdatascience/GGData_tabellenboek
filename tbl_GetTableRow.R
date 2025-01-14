@@ -136,7 +136,7 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
           pvals = matrix(NA, nrow=nrow(weighted), ncol=ncol(weighted))
           rownames(pvals) = rownames(weighted)
    
-          if (!is.na(colgroups$test.col[i]) && colgroups$test.col[i] == 0 && crossings_toetsen[colgroups$crossing[i]]) {
+          if (!is.na(colgroups$test.col[i]) && colgroups$test.col[i] == 0) {
             if (min(dim(weighted)) < 2) {
               msg("Bij variabele %s met crossing %s werd maar één rij/kolom in de kruistabel gevonden (dimensies %s). Hierdoor kan geen chi2-test worden uitgevoerd. Controleer de data.",
                   var, colgroups$crossing[i], str_c(dim(weighted), collapse="x"), level=WARN)
@@ -263,7 +263,7 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
       
       pvals = matrix(NA, nrow=nrow(weighted), ncol=ncol(weighted))
       rownames(pvals) = rownames(weighted)
-      if (!is.na(colgroups$test.col[i]) && colgroups$test.col[i] == 0 && crossings_toetsen[colgroups$crossing[i]]) {
+      if (!is.na(colgroups$test.col[i]) && colgroups$test.col[i] == 0) {
         if (min(dim(weighted)) < 2) {
           msg("Bij variabele %s met crossing %s werd maar één rij/kolom in de kruistabel gevonden (dimensies %s). Hierdoor kan geen chi2-test worden uitgevoerd. Controleer de data.",
               var, colgroups$crossing[i], str_c(dim(weighted), collapse="x"), level=WARN)

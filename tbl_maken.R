@@ -565,7 +565,7 @@ log.save = F
       if (algemeen$sign_toetsen && !is.na(onderdelen$sign_crossing[i])) {
         # uitzoeken welke kolom tegenhanger moet zijn van de chi square
         if (onderdelen$sign_crossing[i] == "intern") {
-          test.col = 0 # 0 toetsen met  andere waarden van de crossing, als waarde toetsen in sheet crossings != FALSE
+          test.col = 0 # 0 = toetsen met andere waarden van de crossing, als waarde toetsen in sheet crossings != FALSE
         } else {
           # geen toets
           test.col = NA
@@ -577,10 +577,16 @@ log.save = F
       for (crossing in crossings) {
         crossing.labels = var_labels[var_labels$var == crossing & var_labels$val != "var",]
         n = nrow(crossing.labels)
+        
+        test.col.current = test.col
+        if (!crossings_toetsen[crossing]) {
+          test.col.current = NA
+        }
+        
         kolom_opbouw = bind_rows(kolom_opbouw, data.frame(col.index=nrow(kolom_opbouw)+(1:n), dataset=rep(d, n),
                                                           subset=rep(onderdelen$subset[i], n), year=rep(onderdelen$jaar[i], n),
                                                           crossing=rep(crossing, n), crossing.val=as.numeric(crossing.labels$val),
-                                                          crossing.lab=crossing.labels$label, test.col=rep(test.col, n), test.display=T))
+                                                          crossing.lab=crossing.labels$label, test.col=rep(test.col.current, n), test.display=T))
       }
     }
     
