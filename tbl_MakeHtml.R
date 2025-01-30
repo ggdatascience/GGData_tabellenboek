@@ -289,26 +289,25 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
       # TODO: iets doen met kleinere labels voor crossings
       # if (design("crossing_headers_kleiner") && sum(!is.na(col.design$crossing)) > 0)
       
-      labels.output = paste0(labels.output, sprintf("<th scope=\"col\"%s>%s</th>", htmlclass, HTMLencode(col.design$crossing.lab[i])))
-      next
-    }
-    
-    # totaalkolom - naam genereren?
-    if (!is.na(col.design$name[i])) {
-      col.name = col.design$name[i]
-      col.name = str_replace(str_replace(col.name, fixed("[naam]"), col.name), fixed("[jaar]"), ifelse(!is.na(col.design$year[i]), col.design$year[i], ""))
+      col.name = col.design$crossing.lab[i]
     } else {
-      # geen naam opgegeven; zelf maken
-      col.name = datasets$naam_dataset[col.design$dataset[i]]
-      if (!is.na(col.design$subset[i])) {
-        col.name = subset.name
-        if (col.design$subset[i] != subset) {
-          col.name = var_labels$label[var_labels$var == col.design$subset[i] & var_labels$val == subsetmatches[subsetmatches[,1] == subset.val, col.design$subset[i]]]
+      # totaalkolom - naam genereren?
+      if (!is.na(col.design$name[i])) {
+        col.name = col.design$name[i]
+        col.name = str_replace(str_replace(col.name, fixed("[naam]"), col.name), fixed("[jaar]"), ifelse(!is.na(col.design$year[i]), col.design$year[i], ""))
+      } else {
+        # geen naam opgegeven; zelf maken
+        col.name = datasets$naam_dataset[col.design$dataset[i]]
+        if (!is.na(col.design$subset[i])) {
+          col.name = subset.name
+          if (col.design$subset[i] != subset) {
+            col.name = var_labels$label[var_labels$var == col.design$subset[i] & var_labels$val == subsetmatches[subsetmatches[,1] == subset.val, col.design$subset[i]]]
+          }
         }
+        
+        # tekstopmaak is in te stellen in de configuratie -> [naam] en [jaar] worden vervangen
+        col.name = str_replace(str_replace(design("header_template"), fixed("[naam]"), col.name), fixed("[jaar]"), ifelse(!is.na(col.design$year[i]), col.design$year[i], ""))
       }
-      
-      # tekstopmaak is in te stellen in de configuratie -> [naam] en [jaar] worden vervangen
-      col.name = str_replace(str_replace(design("header_template"), fixed("[naam]"), col.name), fixed("[jaar]"), ifelse(!is.na(col.design$year[i]), col.design$year[i], ""))
     }
     
     
@@ -382,8 +381,9 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
                          image_uri(logos$bestand[i]),
                          ifelse(!is.na(logos$id[i]), paste0(" id=\"logo_", logos$id[i], "\""), ""))
       
-      if (!is.na(logos$id[i]) && str_detect(template, fixed(sprintf("{logo %s}", logos$id[i])))) {
+      if (!is.na(logos$id[i]) && (str_detect(template, fixed(sprintf("{logo %s}", logos$id[i]))) || str_detect(template, fixed(sprintf("&lbrace;logo %s&rbrace;", logos$id[i]))))) {
         template = str_replace(template, fixed(sprintf("{logo %s}", logos$id[i])), base_img)
+        template = str_replace(template, fixed(sprintf("&lbrace;logo %s&rbrace;", logos$id[i])), base_img)
       } else {
         img = c(img, base_img)
       }
@@ -437,7 +437,7 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
         output = sprintf("<h3 class=\"heading\" id=\"heading_%d\">%s</h3>", i, HTMLencode(output))
       } else if (indeling_rijen$type[i] == "vraag") {
         question.cache = HTMLencode(output)
-        output = sprintf("<h3 class=\"heading vraag\" id=\"heading_%d\">%s</h3>", i, HTMLencode(output))
+        output = sprintf("<h4 class=\"heading vraag\" id=\"heading_%d\">%s</h4>", i, HTMLencode(output))
       } else { # tekst
         output = sprintf("%s<br />", ifelse(is.na(output), "", HTMLencode(output)))
       }
@@ -535,7 +535,9 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
         
         #PS:
         #Metingen die o.b.v te lage aantallen zijn vervangen 
-        if (sum(data.var$n.unweighted[data.var$col.index == col.design$col.index[j]], na.rm=T) == 0) {
+        if (!is.na(indeling_rijen$verberg_crossings[i]) && !is.na(col.design$crossing[j])) {
+          output[,j] = Q_MISSING
+        } else if (sum(data.var$n.unweighted[data.var$col.index == col.design$col.index[j]], na.rm=T) == 0) {
           output[,j] = Q_MISSING
         } else if (sum(data.var$n.unweighted[data.var$col.index == col.design$col.index[j]], na.rm=T) < algemeen$min_observaties_per_vraag) {
           #Alle percentages wegstrepen als aantallen per groep te klein zijn.
@@ -653,7 +655,7 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
         }
         
         # tabel invoegen
-        table.output = c(table.output, paste0("<h3 class=\"vraag\">", HTMLencode(var_labels$label[var_labels$var == indeling_rijen$inhoud[i] & var_labels$val == "var"]), "</h3>",
+        table.output = c(table.output, paste0("<h4 class=\"vraag\">", HTMLencode(var_labels$label[var_labels$var == indeling_rijen$inhoud[i] & var_labels$val == "var"]), "</h4>",
                                               "<table>\r\n",
                                               # titel van de vraag toevoegen
                                               "<caption>", var_labels$label[var_labels$var == indeling_rijen$inhoud[i] & var_labels$val == "var"], "</caption>\r\n",
