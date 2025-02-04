@@ -345,7 +345,7 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
     
     # html voor titels en koppen toevoegen
     intro_tekst$inhoud[intro_tekst$type == "titel"] = sprintf("<h1>%s</h1>", HTMLencode(intro_tekst$inhoud[intro_tekst$type == "titel"]))
-    intro_tekst$inhoud[intro_tekst$type == "kop"] = sprintf("<h2>%s</h2>", HTMLencode(intro_tekst$inhoud[intro_tekst$type == "kop"]))
+    intro_tekst$inhoud[intro_tekst$type == "kop"] = sprintf("<h3>%s</h3>", HTMLencode(intro_tekst$inhoud[intro_tekst$type == "kop"]))
     intro_tekst$inhoud[intro_tekst$type != "titel" & intro_tekst$type != "kop"] = HTMLencode(intro_tekst$inhoud[intro_tekst$type != "titel" & intro_tekst$type != "kop"])
     # lege waarden worden geprint als NA; dat willen we niet
     intro_tekst$inhoud[is.na(intro_tekst$inhoud)] = ""
