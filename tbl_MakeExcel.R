@@ -81,7 +81,7 @@ design = function (var) {
 # subset.name = "Aalten"
 # i = 7
 
-MakeExcel = function (results, var_labels, col.design, subset, subset.val, subsetmatches, n_resp) {
+MakeExcel = function (results, var_labels, col.design, subset, subset.val, subsetmatches, n_resp, filename) {
   subset.name = names(subset.val)
   subset.val = unname(subset.val)
   
@@ -693,8 +693,8 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
   
   # en als laatste... opslaan!
   tryCatch({
-    saveWorkbook(wb, sprintf("output/%s.xlsx", str_replace(subset.name.full, "\\\\|/", " ")), overwrite=T)
-    msg("Tabellenboek voor %s opgeslagen.", subset.name.full, level=MSG)
+    saveWorkbook(wb, sprintf("output/%s.xlsx", str_replace(filename, "\\\\|/", " ")), overwrite=T)
+    msg("Tabellenboek voor %s opgeslagen.", filename, level=MSG)
   },
   error = function(e){
     msg("Er is een fout opgetreden bij het maken van het Excelbestand: %s", e$message, level=MSG)
