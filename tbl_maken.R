@@ -977,7 +977,6 @@ log.save = T
     }
   }
   
-  browser()
   # uitdraaien tabellenboeken
   source(paste0(dirname(this.path()), "/tbl_MakeExcel.R"))
   if (is.null(subsetmatches)) {
