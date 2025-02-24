@@ -180,6 +180,7 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
     intro_tekst$type = str_to_lower(str_trim(intro_tekst$type))
     # in de digitoegankelijke versie is het soms wenselijk om het logo te plaatsen in de tekst, maar binnen Excel heeft dit geen functie; verwijderen
     intro_tekst$inhoud = str_replace_all(intro_tekst$inhoud, fixed("{logo}"), "")
+    intro_tekst$inhoud = str_replace_all(intro_tekst$inhoud, "\\{logo (.*?)\\}", "")
     intro_tekst$inhoud = str_replace_all(intro_tekst$inhoud, fixed("[naam]"), subset.name.full)
     # indien gesplistst per subset: andere subsets ook vervangen?
     if (subset.name.full != design("naam_tabellenboek") && ncol(subsetmatches) > 1) {
@@ -354,7 +355,9 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
         
         #PS:
         #Metingen die o.b.v te lage aantallen zijn vervangen 
-        if (sum(data.var$n.unweighted[data.var$col.index == j], na.rm=T) == 0) {
+        if (!is.na(indeling_rijen$verberg_crossings[i]) && !is.na(col.design$crossing[j])) {
+          output[,j] = Q_MISSING
+        } else if (sum(data.var$n.unweighted[data.var$col.index == j], na.rm=T) == 0) {
           output[,j] = Q_MISSING
         } else if (sum(data.var$n.unweighted[data.var$col.index == j], na.rm=T) < algemeen$min_observaties_per_vraag) {
           #Alle percentages wegstrepen als aantallen per groep te klein zijn.
@@ -575,25 +578,24 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
   for (i in 1:nrow(col.design)) {
     # indien crossing, label van de waarde
     if (!is.na(col.design$crossing.lab[i])) {
-      output[header.col.nrows, i] = col.design$crossing.lab[i]
-      next
-    }
-    
-    if (!is.na(col.design$name[i])) {
-      col.name = col.design$name[i]
-      col.name = str_replace(str_replace(col.name, fixed("[naam]"), col.name), fixed("[jaar]"), ifelse(!is.na(col.design$year[i]), col.design$year[i], ""))
+      col.name = col.design$crossing.lab[i]
     } else {
-      # geen naam opgegeven; zelf maken
-      col.name = datasets$naam_dataset[col.design$dataset[i]]
-      if (!is.na(col.design$subset[i])) {
-        col.name = subset.name
-        if (col.design$subset[i] != subset) {
-          col.name = var_labels$label[var_labels$var == col.design$subset[i] & var_labels$val == subsetmatches[subsetmatches[,1] == subset.val, col.design$subset[i]]]
+      if (!is.na(col.design$name[i])) {
+        col.name = col.design$name[i]
+        col.name = str_replace(str_replace(col.name, fixed("[naam]"), col.name), fixed("[jaar]"), ifelse(!is.na(col.design$year[i]), col.design$year[i], ""))
+      } else {
+        # geen naam opgegeven; zelf maken
+        col.name = datasets$naam_dataset[col.design$dataset[i]]
+        if (!is.na(col.design$subset[i])) {
+          col.name = subset.name
+          if (col.design$subset[i] != subset) {
+            col.name = var_labels$label[var_labels$var == col.design$subset[i] & var_labels$val == subsetmatches[subsetmatches[,1] == subset.val, col.design$subset[i]]]
+          }
         }
+        
+        # tekstopmaak is in te stellen in de configuratie -> [naam] en [jaar] worden vervangen
+        col.name = str_replace(str_replace(design("header_template"), fixed("[naam]"), col.name), fixed("[jaar]"), ifelse(!is.na(col.design$year[i]), col.design$year[i], ""))
       }
-      
-      # tekstopmaak is in te stellen in de configuratie -> [naam] en [jaar] worden vervangen
-      col.name = str_replace(str_replace(design("header_template"), fixed("[naam]"), col.name), fixed("[jaar]"), ifelse(!is.na(col.design$year[i]), col.design$year[i], ""))
     }
     
     # als er afkortingen zijn: deze toevoegen

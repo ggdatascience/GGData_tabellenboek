@@ -9,7 +9,9 @@
 #
 
 # alle huidige data uit de sessie verwijderen
-rm(list=ls()[!ls() %in%  c("skip_config_popup", "config.file")])
+if(!(exists("skip_config_popup") && skip_config_popup)){
+  rm(list=ls()[!ls() %in%  c("skip_config_popup", "config.file")])
+} 
 label_problemen <- NULL
 # benodigde packages installeren als deze afwezig zijn
 pkg_nodig = c("tidyverse", "survey", "haven", "this.path", "textutils",
@@ -42,7 +44,7 @@ source("tbl_helpers.R")
 # in het dagelijks gebruik is MSG ruim voldoende, zet DEBUG alleen aan bij het doorgeven van foutmeldingen aan de werkgroep
 log.level = DEBUG
 # log opslaan naar een tekstbestand?
-log.save = F
+log.save = T
 
 # het gehele script wordt omgeven door curly brackets, zodat een stop() ook daadwerkelijk het script stopt
 {
@@ -56,7 +58,7 @@ log.save = F
   } else {
     msg("er wordt een configuratiebestand gebruikt wat buiten tbl_maken.R is gedefinieerd:", config.file)
   }
-
+  
   #config.file = "configuratieVO.xlsx"
   if (!str_ends(config.file, ".xlsx")) msg("Configuratiebestand dient een Excel-bestand te zijn.", ERR)
   setwd(dirname(config.file))
@@ -124,8 +126,10 @@ log.save = F
   if (!is.na(algemeen$template_html)) {
     # in de configuratie mag {script}/ staan, deze vervangen door pad van het script
     algemeen$template_html = str_replace(algemeen$template_html, fixed("{script}"), dirname(this.path()))
-    if (!file.exists(algemeen$template_html))
+    if (!file.exists(algemeen$template_html)){
       msg("Het templatebestand voor digitoegankelijke tabellenboeken is niet gevonden. Controleer de configuratie: tabblad algemeen, kolom template_html.", algemeen$template_html, level=ERR)
+    }
+    
   }
   
   # sanity checks op indeling_rijen
@@ -178,6 +182,11 @@ log.save = F
     logos$id = NA
   }
   
+  # en verberg_crossings bij indeling_rijen
+  if (!"verberg_crossings" %in% colnames(indeling_rijen)) {
+    indeling_rijen$verberg_crossings = NA
+  }
+  
   # variabelelijst afleiden uit de indeling van het tabellenboek;
   # iedere regel met (n)var is een variabele die we nodig hebben
   varlist = indeling_rijen[indeling_rijen$type %in% c("var", "nvar"),]
@@ -196,6 +205,21 @@ log.save = F
       return(output[!is.na(output)])
     }) %>% unlist() %>% unname()
   
+  # in de sheet 'crossings' zijn twee mogelijke kolommen: varname van crossing, en 
+  # boolean voor toetsen van deze crossing. We splitsen deze voor backward compatability
+  if(length(crossings) == 0){ # scenario 1: een sheet met alleen 'crossings' in A1 (default)
+    crossings_toetsen <- NULL
+  } else if(is.null(colnames(crossings))){ # scenario 2: een sheet met 'crossings' in A1 en daaronder varnames
+    crossings_toetsen <- rep(T, length(crossings))
+    names(crossings_toetsen) <- crossings
+  } else if("toetsen" %in% colnames(crossings)){ # scenario 3: een sheet met 'crossings' in A1 en daaronder varnames en 'toetsen' in B1 en daaronder lijst met booleans
+    crossings_toetsen <- crossings$toetsen
+    crossings <- crossings$crossing
+    names(crossings_toetsen) <- crossings
+  } else{
+    msg("Geen kloppend tabblad crossings. Deze moet bestaan uit één of twee kolommen; crossings en (optioneel) toetsen. Standaard is 'crossings' in cel A1 en verder een lege sheet. Voor meer informatie zie documentatie.", level=ERR)
+  }
+
   if (any(crossings %in% onderdelen$subset)) {
     msg("De variabele(n) %s is/zijn ingevuld als crossing en subset. Een subset kan niet met zichzelf gekruist worden.",
         str_c(crossings[crossings %in% onderdelen$subset], ", "), level=WARN)
@@ -426,6 +450,44 @@ log.save = F
     }
   }
   
+  # zijn er labels om te veranderen?
+  if (nrow(labelcorrectie) > 0) {
+    for (i in 1:nrow(labelcorrectie)) {
+      if (!is.na(labelcorrectie$var[i]) && !(labelcorrectie$var[i] %in% var_labels$var)) {
+        msg("Variabele %s dient volgens de configuratie een nieuw (antwoord)label te krijgen, maar deze is niet aangetroffen in de dataset. (Rij %d.)",
+            labelcorrectie$var[i], i, level=WARN)
+        next
+      }
+      
+      if (!is.na(labelcorrectie$var[i]) && !is.na(labelcorrectie$var_label[i])) {
+        var_labels$label[var_labels$var == labelcorrectie$var[i] & var_labels$val == "var"] = labelcorrectie$var_label[i]
+      }
+      
+      # antwoorden zijn te vervangen op basis van puur tekst, of op basis van variabele
+      # hierdoor kan het zijn dat labelcorrectie$var leeg is, maar antwoord_oud niet
+      if (!is.na(labelcorrectie$antwoord_nieuw[i])) {
+        if (!is.na(labelcorrectie$var[i]) && !(labelcorrectie$var[i] %in% var_labels$var)) {
+          msg("Variabele %s dient volgens de configuratie een nieuw antwoordlabel te krijgen, maar deze is niet aangetroffen in de dataset. (Rij %d.)",
+              labelcorrectie$var[i], i, level=WARN)
+          next
+        }
+        
+        if (is.na(labelcorrectie$antwoord_waarde[i]) && !is.na(labelcorrectie$antwoord_oud[i])) {
+          if (is.na(labelcorrectie$var[i])) {
+            var_labels$label = str_replace(var_labels$label, fixed(labelcorrectie$antwoord_oud[i]), fixed(labelcorrectie$antwoord_nieuw[i]))
+          } else {
+            var_labels$label[var_labels$var == labelcorrectie$var[i]] = str_replace(var_labels$label[var_labels$var == labelcorrectie$var[i]],
+                                                                                    fixed(labelcorrectie$antwoord_oud[i]), fixed(labelcorrectie$antwoord_nieuw[i]))
+          }
+        } else if (!is.na(labelcorrectie$antwoord_waarde[i])) {
+          var_labels$label[var_labels$var == labelcorrectie$var[i] & var_labels$val == labelcorrectie$antwoord_waarde[i]] = labelcorrectie$antwoord_nieuw[i]
+        } else {
+          msg("Labelcorrectie in rij %d is onmogelijk; er is geen waarde of oud antwoord opgegeven.", i, level=WARN)
+        }
+      }
+    }
+  }
+  
   # dummies maken
   for (c in 1:ncol(data)) {
     colname = colnames(data)[c]
@@ -503,7 +565,7 @@ log.save = F
       if (algemeen$sign_toetsen && !is.na(onderdelen$sign_crossing[i])) {
         # uitzoeken welke kolom tegenhanger moet zijn van de chi square
         if (onderdelen$sign_crossing[i] == "intern") {
-          test.col = 0 # 0 betekent andere waarden van de crossing
+          test.col = 0 # 0 = toetsen met andere waarden van de crossing, als waarde toetsen in sheet crossings != FALSE
         } else {
           # geen toets
           test.col = NA
@@ -513,12 +575,18 @@ log.save = F
         test.col = NA
       }
       for (crossing in crossings) {
-        crossing.labels = val_labels(data[[crossing]])
-        n = length(crossing.labels)
+        crossing.labels = var_labels[var_labels$var == crossing & var_labels$val != "var",]
+        n = nrow(crossing.labels)
+        
+        test.col.current = test.col
+        if (!crossings_toetsen[crossing]) {
+          test.col.current = NA
+        }
+        
         kolom_opbouw = bind_rows(kolom_opbouw, data.frame(col.index=nrow(kolom_opbouw)+(1:n), dataset=rep(d, n),
                                                           subset=rep(onderdelen$subset[i], n), year=rep(onderdelen$jaar[i], n),
-                                                          crossing=rep(crossing, n), crossing.val=unname(crossing.labels),
-                                                          crossing.lab=names(crossing.labels), test.col=rep(test.col, n), test.display=T))
+                                                          crossing=rep(crossing, n), crossing.val=as.numeric(crossing.labels$val),
+                                                          crossing.lab=crossing.labels$label, test.col=rep(test.col.current, n), test.display=T))
       }
     }
     
@@ -531,10 +599,10 @@ log.save = F
         # daarom een aparte lijst met indexen die later gevuld moeten worden
         test.col = NA
         test.col.cache = bind_rows(test.col.cache, data.frame(col.index=nrow(kolom_opbouw)+1, test.col=onderdelen$sign_totaal[i]))
+      } else {
+        msg("Let op! Onderdeel %d (dataset %s, subset %s) heeft een ongeldige waarde (%s) in de kolom sign_totaal. Hier is alleen een getal, de naam van een dataset, of een lege cel toegestaan. Indien hier een naam is opgegeven, controleer dan of deze klopt.",
+            i, onderdelen$dataset[i], onderdelen$subset[i], onderdelen$sign_totaal[i], level=ERR)
       }
-    } else if (!is.na(onderdelen$sign_totaal[i])) {
-      msg("Let op! Onderdeel %d (dataset %s, subset %s)  heeft een ongeldige waarde in de kolom sign_totaal. Hier is alleen een getal, de naam van een dataset, of een lege cel toegestaan.",
-          i, onderdelen$dataset[i], onderdelen$subset[i], level=ERR)
     } else {
       test.col = NA
     }
@@ -654,8 +722,9 @@ log.save = F
     varlist.prev.cmp = varlist.prev %>% select(inhoud, starts_with("weeg"))
     
     # sign_doelkolom en kolomnaam zijn nieuw; deze mogen missen
-    kolom_opbouw.cmp = kolom_opbouw %>% select(col.index, dataset, subset, year, crossing, crossing.val, crossing.lab, test.col)
-    kolom_opbouw.prev.cmp = kolom_opbouw.prev %>% select(col.index, dataset, subset, year, crossing, crossing.val, crossing.lab, test.col)
+    # daarnaast mag crossing.lab anders zijn; deze kan in de configuratie aangepast zijn
+    kolom_opbouw.cmp = kolom_opbouw %>% select(col.index, dataset, subset, year, crossing, crossing.val, test.col)
+    kolom_opbouw.prev.cmp = kolom_opbouw.prev %>% select(col.index, dataset, subset, year, crossing, crossing.val, test.col)
     
     if (identical.enough(kolom_opbouw.cmp, kolom_opbouw.prev.cmp) && identical.enough(varlist.cmp, varlist.prev.cmp)) {
       if("forceer_berekening" %in% colnames(algemeen) && algemeen$forceer_berekening){
@@ -671,7 +740,7 @@ log.save = F
         # helaas zijn de resultaten die inmiddels opgeslagen zijn wel volgens de oude manier berekend, dus moeten we de correctie voor de zekerheid uitvoeren
         results = results %>% distinct()
       }
-  
+      
     } else {
       msg("Er zijn eerdere resultaten aangetroffen vanuit deze configuratie (%s), maar de instellingen waren niet identiek. Berekening wordt opnieuw uitgevoerd.", basename(config.file), level=MSG)
     }
@@ -881,43 +950,7 @@ log.save = F
   
   ##### begin wegschrijven tabellenboeken in Excel
   
-  # zijn er labels om te veranderen?
-  if (nrow(labelcorrectie) > 0) {
-    for (i in 1:nrow(labelcorrectie)) {
-      if (!is.na(labelcorrectie$var[i]) && !(labelcorrectie$var[i] %in% var_labels$var)) {
-        msg("Variabele %s dient volgens de configuratie een nieuw (antwoord)label te krijgen, maar deze is niet aangetroffen in de dataset. (Rij %d.)",
-            labelcorrectie$var[i], i, level=WARN)
-        next
-      }
-      
-      if (!is.na(labelcorrectie$var[i]) && !is.na(labelcorrectie$var_label[i])) {
-        var_labels$label[var_labels$var == labelcorrectie$var[i] & var_labels$val == "var"] = labelcorrectie$var_label[i]
-      }
-      
-      # antwoorden zijn te vervangen op basis van puur tekst, of op basis van variabele
-      # hierdoor kan het zijn dat labelcorrectie$var leeg is, maar antwoord_oud niet
-      if (!is.na(labelcorrectie$antwoord_nieuw[i])) {
-        if (!is.na(labelcorrectie$var[i]) && !(labelcorrectie$var[i] %in% var_labels$var)) {
-          msg("Variabele %s dient volgens de configuratie een nieuw antwoordlabel te krijgen, maar deze is niet aangetroffen in de dataset. (Rij %d.)",
-              labelcorrectie$var[i], i, level=WARN)
-          next
-        }
-        
-        if (is.na(labelcorrectie$antwoord_waarde[i]) && !is.na(labelcorrectie$antwoord_oud[i])) {
-          if (is.na(labelcorrectie$var[i])) {
-            var_labels$label = str_replace(var_labels$label, fixed(labelcorrectie$antwoord_oud[i]), fixed(labelcorrectie$antwoord_nieuw[i]))
-          } else {
-            var_labels$label[var_labels$var == labelcorrectie$var[i]] = str_replace(var_labels$label[var_labels$var == labelcorrectie$var[i]],
-                                                                                    fixed(labelcorrectie$antwoord_oud[i]), fixed(labelcorrectie$antwoord_nieuw[i]))
-          }
-        } else if (!is.na(labelcorrectie$antwoord_waarde[i])) {
-          var_labels$label[var_labels$var == labelcorrectie$var[i] & var_labels$val == labelcorrectie$antwoord_waarde[i]] = labelcorrectie$antwoord_nieuw[i]
-        } else {
-          msg("Labelcorrectie in rij %d is onmogelijk; er is geen waarde of oud antwoord opgegeven.", i, level=WARN)
-        }
-      }
-    }
-  }
+  
   
   if (!is.na(algemeen$template_html)) {
     # uitdraaien tabellenboeken in HTML-vorm voor digitoegankelijkheid
@@ -944,6 +977,7 @@ log.save = F
       }
     }
   }
+  
   
   # uitdraaien tabellenboeken
   source(paste0(dirname(this.path()), "/tbl_MakeExcel.R"))
