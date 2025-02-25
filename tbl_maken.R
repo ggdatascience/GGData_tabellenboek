@@ -972,7 +972,7 @@ log.save = T
           next # geen data gevonden voor deze subset, overslaan
         
         msg("Digitoegankelijk tabellenboek voor %s wordt gemaakt.", names(subsetvals[s]), level=MSG)
-        MakeHtml(results, var_labels, kolom_opbouw, colnames(subsetmatches)[1], subsetvals[s], subsetmatches, n_resp, template_html, filename=paste0(basefilename, "_", names(subsetvals[s])))
+        MakeHtml(results, var_labels, kolom_opbouw, colnames(subsetmatches)[1], subsetvals[s], subsetmatches, n_resp, template_html, filename=paste0(basefilename, " ", names(subsetvals[s])))
       }
     }
   }
@@ -992,7 +992,7 @@ log.save = T
         next # geen data gevonden voor deze subset, overslaan
       
       msg("Tabellenboek voor %s wordt gemaakt.", names(subsetvals[s]), level=MSG)
-      MakeExcel(results, var_labels, kolom_opbouw, colnames(subsetmatches)[1], subsetvals[s], subsetmatches, n_resp, filename=paste0(basefilename, "_", names(subsetvals[s])))
+      MakeExcel(results, var_labels, kolom_opbouw, colnames(subsetmatches)[1], subsetvals[s], subsetmatches, n_resp, filename=paste0(basefilename, " ", names(subsetvals[s])))
     }
   }
 }
