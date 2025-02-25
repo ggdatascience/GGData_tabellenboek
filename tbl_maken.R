@@ -949,7 +949,7 @@ log.save = T
   }
   
   ##### begin wegschrijven tabellenboeken in Excel
-  basefilename <- paste0("output_",basename(config.file) %>% gsub(pattern=".xlsx", replacement=""))
+  basefilename <- opmaak %>% filter(type == "naam_tabellenboek") %>% pull(waarde)
   
   if (!is.na(algemeen$template_html)) {
     # uitdraaien tabellenboeken in HTML-vorm voor digitoegankelijkheid
