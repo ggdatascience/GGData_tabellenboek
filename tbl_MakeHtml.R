@@ -170,7 +170,7 @@ BuildHtmlTableRows = function (input, col.design, n=F) {
 # template = template_html
 # i = 7
 
-MakeHtml = function (results, var_labels, col.design, subset, subset.val, subsetmatches, n_resp, template) {
+MakeHtml = function (results, var_labels, col.design, subset, subset.val, subsetmatches, n_resp, template, filename) {
   subset.name = names(subset.val)
   subset.val = unname(subset.val)
   
@@ -766,8 +766,8 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
   # en als laatste... opslaan!
   tryCatch({
     #saveWorkbook(wb, sprintf("output/%s.xlsx", subset.name), overwrite=T)
-    cat(template, file=sprintf("output/%s.html", str_replace(subset.name, "\\\\|/", " ")))
-    msg("Digitoegankelijk tabellenboek voor %s opgeslagen.", subset.name, level=MSG)
+    cat(template, file=sprintf("output/%s.html", str_replace(filename, "\\\\|/", " ")))
+    msg("Digitoegankelijk tabellenboek voor %s opgeslagen.", filename, level=MSG)
   },
   error = function(e){
     msg("Er is een fout opgetreden bij het maken van het digitoegankelijke tabellenboek: %s", e$message, level=MSG)

@@ -949,8 +949,7 @@ log.save = T
   }
   
   ##### begin wegschrijven tabellenboeken in Excel
-  
-  
+  basefilename <- opmaak %>% filter(type == "naam_tabellenboek") %>% pull(waarde)
   
   if (!is.na(algemeen$template_html)) {
     # uitdraaien tabellenboeken in HTML-vorm voor digitoegankelijkheid
@@ -961,7 +960,7 @@ log.save = T
     if (is.null(subsetmatches)) {
       # geen subsets, 1 tabellenboek
       msg("Digitoegankelijk tabellenboek wordt gemaakt.", level=MSG)
-      MakeHtml(results, var_labels, kolom_opbouw, NA, NA, subsetmatches, n_resp, template_html)
+      MakeHtml(results, var_labels, kolom_opbouw, NA, NA, subsetmatches, n_resp, template_html, filename=basefilename)
     } else {
       # wel subsets, meerdere tabellenboeken
       subsetvals = subsetmatches[, 1]
@@ -973,18 +972,17 @@ log.save = T
           next # geen data gevonden voor deze subset, overslaan
         
         msg("Digitoegankelijk tabellenboek voor %s wordt gemaakt.", names(subsetvals[s]), level=MSG)
-        MakeHtml(results, var_labels, kolom_opbouw, colnames(subsetmatches)[1], subsetvals[s], subsetmatches, n_resp, template_html)
+        MakeHtml(results, var_labels, kolom_opbouw, colnames(subsetmatches)[1], subsetvals[s], subsetmatches, n_resp, template_html, filename=paste0(basefilename, " ", names(subsetvals[s])))
       }
     }
   }
-  
   
   # uitdraaien tabellenboeken
   source(paste0(dirname(this.path()), "/tbl_MakeExcel.R"))
   if (is.null(subsetmatches)) {
     # geen subsets, 1 tabellenboek
     msg("Tabellenboek wordt gemaakt.", level=MSG)
-    MakeExcel(results, var_labels, kolom_opbouw, NA, NA, subsetmatches, n_resp)
+    MakeExcel(results, var_labels, kolom_opbouw, NA, NA, subsetmatches, n_resp, filename=basefilename)
   } else {
     # wel subsets, meerdere tabellenboeken
     subsetvals = subsetmatches[, 1]
@@ -994,7 +992,7 @@ log.save = T
         next # geen data gevonden voor deze subset, overslaan
       
       msg("Tabellenboek voor %s wordt gemaakt.", names(subsetvals[s]), level=MSG)
-      MakeExcel(results, var_labels, kolom_opbouw, colnames(subsetmatches)[1], subsetvals[s], subsetmatches, n_resp)
+      MakeExcel(results, var_labels, kolom_opbouw, colnames(subsetmatches)[1], subsetvals[s], subsetmatches, n_resp, filename=paste0(basefilename, " ", names(subsetvals[s])))
     }
   }
 }
