@@ -59,9 +59,28 @@ MatchTables = function (weighted, unweighted, is_2d=F) {
   return(list(weighted.corr, unweighted.corr))
 }
 
+svyCollapseIntoMean <- function(x, do_it = F, crossing = F){
+  if(!do_it){return(x)}
+  
+  if(crossing){
+    # crossing: we get a table
+    out <- x
+    out[1, ] <- 0
+    out[2, ] <- colSums(x * (rownames(x) %>% as.numeric)) / colSums(x)
+    out <- out[1:2, ]
+    rownames(out) <- c("FALSE", "TRUE")
+  } else {
+    # no crossing: we get a vector
+    out <- c(0,sum(as.numeric(names(x))*x)/sum(x))
+    names(out) <- c("FALSE", "TRUE")
+  }
+  
+  return(out %>% round(2))
+}
+
 # col.design = kolom_opbouw
 # s = 43
-GetTableRow = function (var, design, col.design, subsetmatches) {
+GetTableRow = function (var, design, col.design, subsetmatches, is_continuous) {
   msg("Variabele %s wordt uitgevoerd over %d kolommen.", var, nrow(col.design), level=MSG)
   
   results = data.frame()
@@ -110,6 +129,7 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
         
         # crossing?
         if (!is.na(colgroups$crossing[i])) {
+          message("SUBSET=JA CROSSING=JA")
           # dit betekent meerdere kolommen vullen, want crossing
           cols = col.design$col.index[group_rows(col.design)[[i]]]
           
@@ -169,6 +189,7 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
                                                   n.unweighted=as.numeric(unname(unweighted)), perc.unweighted=as.numeric(unname(proportions(unweighted, margin=2)))*100))
         } else {
           # geen crossing; totaal
+          message("SUBSET=JA CROSSING=NEE")
           col = col.design$col.index[group_rows(col.design)[[i]]]
           
           if (!(paste0("dummy._col", col, ".s.", subsetval) %in% names(design$variables))) {
@@ -249,6 +270,7 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
     
     # crossing?
     if (!is.na(colgroups$crossing[i])) {
+      message("SUBSET=NEE CROSSING=JA")
       # dit betekent meerdere kolommen vullen, want crossing
       cols = col.design$col.index[group_rows(col.design)[[i]]]
       selection = str_c(paste0("dummy._col", cols), collapse=" | ")
@@ -257,8 +279,8 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
       weighted.raw = svytable(formula=as.formula(paste0("~", var, "+", colgroups$crossing[i])),
                           design=design.subset)
       unweighted.raw = table(design.subset$variables[[var]], design.subset$variables[[colgroups$crossing[i]]])
-      weighted = MatchTables(weighted.raw, unweighted.raw, T)[[1]]
-      unweighted = MatchTables(weighted.raw, unweighted.raw, T)[[2]]
+      weighted = MatchTables(weighted.raw, unweighted.raw, T)[[1]] %>% svyCollapseIntoMean(do_it = is_continuous, crossing = T)
+      unweighted = MatchTables(weighted.raw, unweighted.raw, T)[[2]] %>% svyCollapseIntoMean(do_it = is_continuous, crossing = T)
       n = length(weighted)
       
       pvals = matrix(NA, nrow=nrow(weighted), ncol=ncol(weighted))
@@ -286,27 +308,38 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
       # we moeten dus de waardes indelen als colnames[1] * nrow, colnames[2] * nrow, etc.
       vals = as.vector(sapply(colnames(weighted), function (x, nrows) return(rep(x, nrows)), nrows=nrow(weighted)))
       
-      results = bind_rows(results, data.frame(dataset=rep(colgroups$dataset[i], n), subset=rep(colgroups$subset[i], n), subset.val=rep(NA, n),
-                                              year=rep(colgroups$year[i], n),
-                                              crossing=rep(colgroups$crossing[i], n), crossing.val=vals,
-                                              var=rep(var, n), val=rownames(weighted),
-                                              sign=as.numeric(unname(pvals)), sign.vs=rep(colgroups$test.col[i], n),
-                                              n.weighted=as.numeric(unname(weighted)), perc.weighted=as.numeric(unname(proportions(weighted, margin=2)))*100,
-                                              n.unweighted=as.numeric(unname(unweighted)), perc.unweighted=as.numeric(unname(proportions(unweighted, margin=2)))*100))
+      new_results <- data.frame(dataset=rep(colgroups$dataset[i], n), subset=rep(colgroups$subset[i], n), subset.val=rep(NA, n),
+                                year=rep(colgroups$year[i], n),
+                                crossing=rep(colgroups$crossing[i], n), crossing.val=vals,
+                                var=rep(var, n), val=rownames(weighted),
+                                sign=as.numeric(unname(pvals)), sign.vs=rep(colgroups$test.col[i], n),
+                                n.weighted=as.numeric(unname(weighted)), perc.weighted=as.numeric(unname(proportions(weighted, margin=2)))*100,
+                                n.unweighted=as.numeric(unname(unweighted)), perc.unweighted=as.numeric(unname(proportions(unweighted, margin=2)))*100)
+      
+      if(is_continuous){
+        new_results$perc.weighted <- new_results$n.weighted
+        new_results$perc.unweighted <- new_results$n.unweighted
+      }
+      
+      results = bind_rows(results, new_results)
     } else {
       # geen crossing; totaal
+      message("SUBSET=NEE CROSSING=NEE")
       
       col = col.design$col.index[group_rows(col.design)[[i]]]
       
-      weighted = svytable(formula=as.formula(paste0("~", var, "+dummy._col", col)), design=design)
+      weighted = svytable(formula=as.formula(paste0("~", var, "+dummy._col", col)), design=design) %>% svyCollapseIntoMean(do_it=is_continuous, crossing=F)
+      unweighted.raw <- table(design$variables[[var]][design$variables[,paste0("dummy._col", col)]]) %>% svyCollapseIntoMean(do_it=is_continuous, crossing=F)
       if ("TRUE" %in% colnames(weighted)) {
         weighted = weighted[,"TRUE"]
+      } else if("TRUE" %in% names(weighted)){
+        weighted = weighted[["TRUE"]]
       } else {
         names = rownames(weighted)
         weighted = rep(NA, nrow(weighted))
         names(weighted) = names
       }
-      unweighted = MatchTables(weighted, table(design$variables[[var]][design$variables[,paste0("dummy._col", col)]]))[[2]]
+      unweighted = MatchTables(weighted, unweighted.raw)[[2]]
       if (sum(unweighted, na.rm=T) <= 0) unweighted = rep(NA, length(weighted))
       n = length(weighted)
       
@@ -344,14 +377,25 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
           }
         }
       }
+      browser()
+      new_results <- data.frame(
+        dataset=rep(col.design$dataset[col], n),
+        subset=rep(col.design$subset[col], n),
+        subset.val=rep(NA, n),
+        year=rep(col.design$year[col], n),
+        crossing=rep(col.design$crossing[col], n),
+        crossing.val=as.character(rep(col.design$crossing.val[col], n)),
+        var=rep(var, n),
+        val=rownames(weighted),
+        sign=pvals,
+        sign.vs=rep(col.design$test.col[col], n),
+        n.weighted=as.numeric(unname(weighted)),
+        perc.weighted=proportions(as.numeric(unname(weighted)))*100,
+        n.unweighted=as.numeric(unname(unweighted)),
+        perc.unweighted=proportions(as.numeric(unname(unweighted)))*100
+      )
       
-      results = bind_rows(results, data.frame(dataset=rep(col.design$dataset[col], n), subset=rep(col.design$subset[col], n), subset.val=rep(NA, n),
-                                              year=rep(col.design$year[col], n),
-                                              crossing=rep(col.design$crossing[col], n), crossing.val=as.character(rep(col.design$crossing.val[col], n)),
-                                              var=rep(var, n), val=names(weighted),
-                                              sign=pvals, sign.vs=rep(col.design$test.col[col], n),
-                                              n.weighted=as.numeric(unname(weighted)), perc.weighted=proportions(as.numeric(unname(weighted)))*100,
-                                              n.unweighted=as.numeric(unname(unweighted)), perc.unweighted=proportions(as.numeric(unname(unweighted)))*100))
+      results = bind_rows(results, new_results)
     }
   }
   

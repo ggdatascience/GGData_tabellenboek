@@ -86,7 +86,7 @@ log.save = T
   # daadwerkelijk inlezen configuratie
   # TODO: onmogelijke waardes checken
   sheets = c("algemeen", "crossings", "datasets", "indeling_rijen", "onderdelen", "opmaak", "labelcorrectie", "logos", "intro_tekst", "headers_afkortingen",
-             "dichotoom", "niet_dichotoom", "forceer_datatypen")
+             "dichotoom", "niet_dichotoom", "continu", "forceer_datatypen")
   for (sheet in sheets) {
     tmp = read.xlsx(config.file, sheet=sheet)
     
@@ -229,6 +229,9 @@ log.save = T
     msg("De variabele(n) %s is/zijn ingevuld als crossing en variabele in indeling_rijen. Een variabele kan niet met zichzelf gekruist worden.",
         str_c(crossings[crossings %in% varlist$inhoud], ", "), level=WARN)
   }
+  
+  # continue variabelen
+  if(!exists("continu")){continu <- "GEEN_CONTINUE_VARIABELEN_IN_CONFIG"}
   
   # datasets combineren en de strata en weegfactoren apart opslaan
   data.combined = data.frame()
@@ -748,125 +751,7 @@ log.save = T
   
   if (calc.results) {
     source(paste0(dirname(this.path()), "/tbl_GetTableRow.R"))
-    results = data.frame()
-    
-    ##################### BEGIN ONGEBRUIKTE CODE
-    # dit is een project wat we ergens na VO willen toevoegen
-    # voor nu wordt dit in zijn geheel overgeslagen, vandaar de if (F)
-    # TODO: parallel proberen te maken
-    if (F) {
-      # berekeningen kunnen parallel worden uitgevoerd met multithreading
-      # hierdoor worden meerdere processorkernen ingezet om de berekeningen uit te voeren
-      # (dit kan handig zijn, omdat survey een bijzonder traag pakket is)
-      
-      clus = makeCluster(detectCores())
-      registerDoParallel(clus)
-      
-      
-      #### poging met plyr
-      results = data.frame()
-      
-      PrepdataForSurveyAndGetTableRow = function(
-    var,
-    data.in,
-    kolom_opbouw.in,
-    subsetmatches.in
-      ){
-        source("tbl_GetTableRow.R")
-        source("tbl_helpers.R")
-        options(survey.lonely.psu="certainty")
-        vars = c(var, kolom_opbouw.in$crossing, kolom_opbouw.in$subset, colnames(data.in)[str_starts(colnames(data.in), "dummy._col")],
-                 colnames(data.in)[str_starts(colnames(data.in), paste0("dummy.", var))], "superstrata", "superweegfactor")
-        vars = unique(vars[!is.na(vars)])
-        data.in.tmp = data.in[,vars]
-        design = svydesign(ids=~1, strata=data.in.tmp$superstrata, weights=data.in.tmp$superweegfactor, data=data.in.tmp)
-        return(GetTableRow(var, design, kolom_opbouw.in, subsetmatches.in, F))
-      }
-      
-      out <- alply(
-        .data = varlist,
-        .margins = 1,
-        .fun = PrepdataForSurveyAndGetTableRow,
-        data.in = data,
-        kolom_opbouw.in = kolom_opbouw,
-        subsetmatches.in = subsetmatches,
-        .parallel = algemeen$multithreading,
-        .paropts = list(
-          .packages = c("survey", "tidyverse", "labelled")
-        ),
-        .progress = progress_time()
-      )
-      
-      results <- out %>% reduce(.f = bind_rows)
-      
-      stopCluster(clus)
-      
-      
-      #### poging met foreach
-      clus = makeCluster(detectCores())
-      registerDoParallel(clus)
-      
-      t.start = proc.time()["elapsed"]
-      results = foreach(var=varlist, .combine=bind_rows, .packages=c("tidyverse", "survey", "labelled")) %dopar% {
-        var = varlist$inhoud[i]
-        # we kunnen de dataset die de functie in moet flink verkleinen; alle variabelen
-        # behalve [var], dummy._col[1:n], dummy.[var], de subsets en de crossings kunnen eruit
-        vars = c(var, kolom_opbouw$crossing, kolom_opbouw$subset, colnames(data)[str_starts(colnames(data), "dummy._col")],
-                 colnames(data)[str_starts(colnames(data), paste0("dummy.", var))], "superstrata", "superweegfactor",
-                 "tbl_dataset", weight.factors)
-        vars = unique(vars[!is.na(vars)])
-        data.tmp = data[,vars]
-        
-        # nu wordt het ingewikkeld: in de monitor VO zijn verschillende weegfactoren nodig per jaar
-        # dit betekent dat we per variabele EN per dataset een andere weegfactor kunnen hebben
-        # daarvoor kan een combinatieweegfactor gemaakt worden, als er gewerkt wordt met één groot combinatiebestand,
-        # of er kan een 'superweegfactor' gemaakt worden, gelijkend aan de superweegfactor die door combinatie hierboven ontstaan is
-        # aangezien niet alle GGD'en een overkoepelend bestand hebben is hier gekozen voor de tweede optie
-        # gezien de complexiteit wordt deze code lelijk, daar is helaas weinig aan te doen
-        
-        if (any(str_detect(colnames(varlist), "weegfactor"))) {
-          # tijd om te huilen
-          # mogelijke opties:
-          # "weegfactor" -> override voor die variabele
-          # "weegfactor.d[getal]" -> override voor die variabele in dataset [getal]
-          # "weegfactor.d_[naam]" -> override voor die variabele in dataset [naam]
-          weegfactorvars = str_match(colnames(varlist), "weegfactor(.*)")
-          weegfactorvars = weegfactorvars[!is.na(weegfactorvars)[,1],]
-          
-          for (j in 1:nrow(weegfactorvars)) {
-            wfname = weegfactorvars[j,1]
-            wfdataset = weegfactorvars[j,2]
-            
-            if (wfname == "weegfactor" && !is.na(varlist$weegfactor[j])) {
-              data.tmp$superweegfactor = data.tmp[[varlist$weegfactor[j]]]
-            } else if (!is.na(varlist[[wfname]][i]) && str_detect(wfdataset, "^\\.d(\\d+)$")) { # numeriek, dus d[getal]
-              dataset = as.numeric(str_match(wfdataset, "(\\d)+")[,2])
-              data.tmp$superweegfactor[data.tmp$tbl_dataset == dataset] = data.tmp[[varlist[[wfname]][j]]][data.tmp$tbl_dataset == dataset]
-            } else if (!is.na(varlist[[wfname]][i]) && str_detect(wfdataset, "^\\.d_(.+)")) { # naam van een dataset
-              dataset = str_match(wfdataset, "^\\.d_(.+)")[,2]
-              if (!dataset %in% datasets$naam_dataset) {
-                msg("Er is een weegfactor opgegeven in indeling_rijen voor dataset %s, maar deze dataset is niet bekend. Controleer de configuratie.", dataset, level=ERR)
-              }
-              dataset = which(datasets$naam_dataset == dataset)
-              data.tmp$superweegfactor[data.tmp$tbl_dataset == dataset] = data.tmp[[varlist[[wfname]][j]]][data.tmp$tbl_dataset == dataset]
-            } else if (!is.na(varlist[[wfname]][i])) {
-              msg("Onbekende weegfactordefinitie opgegeven: %s. Controleer de configuratie.", wfname, level=ERR)
-            }
-          }
-        }
-        
-        design = svydesign(ids=~1, strata=data.tmp$superstrata, weights=data.tmp$superweegfactor, data=data.tmp)
-        
-        results = bind_rows(results, GetTableRow(var, design, kolom_opbouw, subsetmatches, F))
-      }
-      t.end = proc.time()["elapsed"]
-      msg("Totale rekentijd %0.2f min voor %d variabelen. Gemiddelde tijd per variabele was %0.1f sec.",
-          (t.end-t.start)/60, nrow(varlist), t.end-t.start/nrow(varlist), level=MSG)
-      
-      stopCluster(clus)
-    }
-    ##################### EINDE ONGEBRUIKTE CODE
-    
+ 
     results = data.frame()
     t.start = proc.time()["elapsed"]
     t.vars = c()
@@ -927,7 +812,7 @@ log.save = T
       design = svydesign(ids=~1, strata=data.tmp$superstrata, weights=data.tmp$superweegfactor, data=data.tmp)
       
       t.before = proc.time()["elapsed"]
-      results = bind_rows(results, GetTableRow(var, design, kolom_opbouw, subsetmatches))
+      results = bind_rows(results, GetTableRow(var, design, kolom_opbouw, subsetmatches, is_continuous = var %in% continu))
       t.after = proc.time()["elapsed"]
       t.vars = c(t.vars, t.after-t.before)
       
