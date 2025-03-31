@@ -515,7 +515,7 @@ log.save = T
     dataset_columns = which(data$tbl_dataset == d) # welke kolommen in data gaan over dataset d, 'mijn kolommen'?
     strata = data$tbl_strata[dataset_columns] # wat zijn de strata van mijn kolommen?
     unique_strata = sort(unique(strata)) # unique strata
-    if(!is.na(datasets$fpc[d])){
+    if("fpc" %in% colnames(datasets) && !is.na(datasets$fpc[d])){
       # zoek de fpc data op en berekenen sampling prob per stratum
       fpc_data <- table(data$tbl_strata[dataset_columns]) %>%
         as.data.frame %>% 
