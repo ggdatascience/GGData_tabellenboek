@@ -71,11 +71,19 @@ svyCollapseIntoMean <- function(x, do_it = F, crossing = F){
     rownames(out) <- c("FALSE", "TRUE")
   } else {
     # no crossing: we get a vector
-    out <- c(0,sum(as.numeric(names(x))*x)/sum(x))
+    out <- c(0, sum(as.numeric(names(x)) * x) / sum(x))
     names(out) <- c("FALSE", "TRUE")
   }
   
   return(out %>% round(2))
+}
+
+NaIfNull <- function(x, l=1){
+  if(is.null(x)){
+    return(rep(NA, l))
+  } else{
+    return(x)
+  }
 }
 
 # col.design = kolom_opbouw
@@ -377,7 +385,7 @@ GetTableRow = function (var, design, col.design, subsetmatches, is_continuous) {
           }
         }
       }
-      browser()
+      
       new_results <- data.frame(
         dataset=rep(col.design$dataset[col], n),
         subset=rep(col.design$subset[col], n),
@@ -386,7 +394,7 @@ GetTableRow = function (var, design, col.design, subsetmatches, is_continuous) {
         crossing=rep(col.design$crossing[col], n),
         crossing.val=as.character(rep(col.design$crossing.val[col], n)),
         var=rep(var, n),
-        val=rownames(weighted),
+        val=names(weighted) %>% NaIfNull(l=n),
         sign=pvals,
         sign.vs=rep(col.design$test.col[col], n),
         n.weighted=as.numeric(unname(weighted)),
