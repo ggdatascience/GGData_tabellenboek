@@ -60,18 +60,32 @@ MatchTables = function (weighted, unweighted, is_2d=F) {
 }
 
 svyCollapseIntoMean <- function(x, do_it = F, crossing = F){
-  if(!do_it){return(x)}
+  cat("collapsing: ")
+  if(!do_it){
+    cat("nope!\n")
+    return(x)
+    }
   
   if(crossing){
+    cat("matrix input from crossing!\n")
     # crossing: we get a table
     out <- x
     out[1, ] <- 0
     out[2, ] <- colSums(x * (rownames(x) %>% as.numeric)) / colSums(x)
     out <- out[1:2, ]
     rownames(out) <- c("FALSE", "TRUE")
+  } else if(!is.na(ncol(x))){
+    cat("matrix input from non-crossing!\n")
+    out <- x
+    out[1, ] <- 0
+    out[2, ] <- colSums(x * (rownames(x) %>% as.numeric)) / colSums(x)
+    out <- out[1:2, ]
+    names(out) <- c("FALSE", "TRUE")
   } else {
-    # no crossing: we get a vector
-    out <- c(0, sum(as.numeric(names(x)) * x) / sum(x))
+    cat("vector input!\n")
+    print(head(x))
+    out <- x
+    out <- c(0, sum(x * (names(x) %>% as.numeric)) / sum(x))
     names(out) <- c("FALSE", "TRUE")
   }
   
@@ -332,6 +346,7 @@ GetTableRow = function (var, design, col.design, subsetmatches, is_continuous) {
       results = bind_rows(results, new_results)
     } else {
       # geen crossing; totaal
+      #### debug ####
       message("SUBSET=NEE CROSSING=NEE")
       
       col = col.design$col.index[group_rows(col.design)[[i]]]
@@ -339,10 +354,15 @@ GetTableRow = function (var, design, col.design, subsetmatches, is_continuous) {
       weighted = svytable(formula=as.formula(paste0("~", var, "+dummy._col", col)), design=design) %>% svyCollapseIntoMean(do_it=is_continuous, crossing=F)
       unweighted.raw <- table(design$variables[[var]][design$variables[,paste0("dummy._col", col)]]) %>% svyCollapseIntoMean(do_it=is_continuous, crossing=F)
       if ("TRUE" %in% colnames(weighted)) {
+        cat("naming option 1\n")
         weighted = weighted[,"TRUE"]
       } else if("TRUE" %in% names(weighted)){
-        weighted = weighted[["TRUE"]]
+        cat("naming option 2\n")
+        #browser()
+        #weighted = weighted[["TRUE"]]
+        #names(weighted) = TRUE
       } else {
+        cat("naming option 3\n")
         names = rownames(weighted)
         weighted = rep(NA, nrow(weighted))
         names(weighted) = names
