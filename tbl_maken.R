@@ -519,11 +519,10 @@ log.save = T
       # zoek de fpc data op en berekenen sampling prob per stratum
       fpc_data <- table(data$tbl_strata[dataset_columns]) %>%
         as.data.frame %>% 
-        rename(stratum=Var1) %>% 
+        rename(stratum = Var1) %>% 
         left_join(
           read.xlsx(datasets$fpc[d]) %>% 
-            mutate(stratum = as.factor(stratum)
-            ),
+            mutate(stratum = as.factor(stratum)),
           join_by(stratum == stratum)
         ) %>% 
         mutate(fpc = Freq / populatiegrootte)
