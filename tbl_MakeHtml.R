@@ -116,8 +116,11 @@ BuildHtmlTableRows = function (input, col.design, n=F) {
     for (c in 1:(ncol(input) - 2)) {
       val = input[i, c+2]
       htmlclass = c()
-      
-      if (val == A_TOOSMALL) {
+      print(val)
+      if (is.null(val) || is.na(val)){
+        val = algemeen$tekst_missende_data
+        htmlclass = c(htmlclass, "data_missend")
+      } else if (val == A_TOOSMALL) {
         val = algemeen$tekst_min_antwoord_niet_gehaald
         htmlclass = c(htmlclass, "antwoord_niet_gehaald")
       } else if (val == Q_TOOSMALL) {
