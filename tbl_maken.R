@@ -516,17 +516,38 @@ log.save = T
     strata = data$tbl_strata[dataset_columns] # wat zijn de strata van mijn kolommen?
     unique_strata = sort(unique(strata)) # unique strata
     if("fpc" %in% colnames(datasets) && !is.na(datasets$fpc[d])){
-      # zoek de fpc data op en berekenen sampling prob per stratum
-      fpc_data <- table(data$tbl_strata[dataset_columns]) %>%
+      fpc_data <- table(strata) %>%
         as.data.frame %>% 
-        rename(stratum = Var1) %>% 
-        left_join(
-          read.xlsx(datasets$fpc[d]) %>% 
-            mutate(stratum = as.factor(stratum)),
-          join_by(stratum == stratum)
-        ) %>% 
-        mutate(fpc = Freq / populatiegrootte)
-      
+        rename(stratum = strata)
+      if(file.exists(datasets$fpc[d])){
+        # als het een pad is: zoek de fpc data op en berekenen sampling prob per stratum
+          fpc_data <- fpc_data %>% left_join(
+            read.xlsx(datasets$fpc[d]) %>% 
+              mutate(stratum = as.factor(stratum)),
+            join_by(stratum == stratum)
+          ) %>% 
+          mutate(fpc = Freq / populatiegrootte)
+      } else if(grepl("grootgewicht_", datasets$fpc[d])){
+        # als er grote gewichten inzitten (die weergeven hoeveel mensen een respondent vertegenwoordigd)
+        # dan kan je populatiegroottes afleiden daaruit
+        fpc_data <- fpc_data %>% 
+          left_join(
+            data %>%
+              group_by(PrimaireEenheid) %>%
+              summarise(populatiegrootte = sum(!!sym(gsub("grootgewicht_", "", datasets$fpc[d])), na.rm = TRUE)), 
+            join_by(stratum == PrimaireEenheid)
+          ) %>% 
+          mutate(
+            fpc = Freq / populatiegrootte
+          )
+        
+      } else if(datasets$fpc[d] %in% colnames(data)){
+        # als de fpc correctiefactor gewoon een kolom is, dan die overnemen
+        fpc_per_respondent <- data.frame(fpc = data %>% select(!!sym(datasets$fpc[d])))
+      } else {
+        # anders: onbekende methode, geef fout
+        msg("FPC is aangegeven maar onbekende FPC methode. Zie handleiding voor opties.", level=ERR)
+      }
       # merge zodat we voor elke respondent een sampling prob hebben
       fpc_per_respondent <- data.frame(
         stratum = strata %>% as.factor
