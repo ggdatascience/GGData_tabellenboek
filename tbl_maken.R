@@ -526,7 +526,7 @@ log.save = T
               mutate(stratum = as.factor(stratum)),
             join_by(stratum == stratum)
           ) %>% 
-          mutate(fpc = Freq / populatiegrootte)
+          mutate(fpc = populatiegrootte)
       } else if(grepl("grootgewicht_", datasets$fpc[d])){
         # als er grote gewichten inzitten (die weergeven hoeveel mensen een respondent vertegenwoordigd)
         # dan kan je populatiegroottes afleiden daaruit
@@ -538,7 +538,7 @@ log.save = T
             join_by(stratum == PrimaireEenheid)
           ) %>% 
           mutate(
-            fpc = Freq / populatiegrootte
+            fpc = populatiegrootte
           )
         
       } else if(datasets$fpc[d] %in% colnames(data)){
@@ -546,7 +546,7 @@ log.save = T
         fpc_per_respondent <- data.frame(fpc = data %>% select(!!sym(datasets$fpc[d])))
       } else {
         # anders: onbekende methode, geef fout
-        msg("FPC is aangegeven maar onbekende FPC methode. Zie handleiding voor opties.", level=ERR)
+        msg("FPC is aangegeven maar onbekende FPC kolom input '%s'. Zie handleiding voor opties.", datasets$fpc[d], level=ERR)
       }
       # merge zodat we voor elke respondent een sampling prob hebben
       fpc_per_respondent <- data.frame(
@@ -813,7 +813,7 @@ log.save = T
       # we kunnen de dataset die de functie in moet flink verkleinen; alle variabelen
       # behalve [var], dummy._col[1:n], dummy.[var], de subsets en de crossings kunnen eruit
       vars = c(var, kolom_opbouw$crossing, kolom_opbouw$subset, colnames(data)[str_starts(colnames(data), "dummy._col")],
-               colnames(data)[str_starts(colnames(data), paste0("dummy.", var))], "superstrata", "superweegfactor",
+               colnames(data)[str_starts(colnames(data), paste0("dummy.", var))], "superstrata", "superweegfactor", "fpc",
                "tbl_dataset", weight.factors)
       vars = unique(vars[!is.na(vars)])
       data.tmp = data[,vars]
@@ -856,7 +856,7 @@ log.save = T
         }
       }
       
-      design = svydesign(ids=~1, strata=data.tmp$superstrata, weights=data.tmp$superweegfactor, data=data.tmp, fpc=data.tmp$fpc)
+      design = svydesign(ids=~1, strata=~superstrata, weights=~superweegfactor, fpc=~fpc, data=data.tmp)
       
       t.before = proc.time()["elapsed"]
       results = bind_rows(results, GetTableRow(var, design, kolom_opbouw, subsetmatches))
@@ -871,6 +871,12 @@ log.save = T
     
     # aangezien een tweede subset vaker kan draaien moeten we hier een distinct op doen
     results = results %>% distinct()
+    
+    # multiple testing correctie
+    if("multiple_testing_correction" %in% colnames(algemeen) && !is.na(algemeen$multiple_testing_correction[1])){
+      msg("Correctie voor multiple testing toegepast met methode %s", algemeen$multiple_testing_correction[1])
+      results$sign <- p.adjust(results$sign, algemeen$multiple_testing_correction[1])
+    }
     
     # resultaten opslaan voor hergebruik
     # N.B.: alles in UTF-8 om problemen met een trema o.i.d. te voorkomen
