@@ -887,7 +887,7 @@ log.save = T
       } else {
         aantal_toetsen <- length(results$sign[!is.na(results$sign)])
       }
-      msg("Correctie voor multiple testing (aantal toetsen %f) toegepast met methode %s", aantal_toetsen, algemeen$multiple_testing_correction[1])
+      msg("Correctie voor multiple testing (aantal toetsen %d) toegepast met methode %s", aantal_toetsen, algemeen$multiple_testing_correction[1])
       results$sign <- p.adjust(results$sign, algemeen$multiple_testing_correction[1])
     }
     
