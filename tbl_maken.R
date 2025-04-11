@@ -548,6 +548,12 @@ log.save = T
         # anders: onbekende methode, geef fout
         msg("FPC is aangegeven maar onbekende FPC kolom input '%s'. Zie handleiding voor opties.", datasets$fpc[d], level=ERR)
       }
+      # se correctie factor berekenen
+      fpc_data <- fpc_data %>% 
+        mutate(
+          correctie_se = sqrt((populatiegrootte - Freq) / (populatiegrootte - 1))
+        )
+      
       # merge zodat we voor elke respondent een sampling prob hebben
       fpc_per_respondent <- data.frame(
         stratum = strata %>% as.factor
@@ -557,6 +563,8 @@ log.save = T
       
       # voeg de fpc factor toe aan de data
       data$fpc[dataset_columns] <- fpc_per_respondent$fpc
+    } else {
+      fpc_data <- "Geen FPC toegepast"
     }
     for (i in 1:length(unique_strata)) {
       data$superstrata[dataset_columns & data$tbl_strata == unique_strata[i]] = d*1000 + i
@@ -877,10 +885,9 @@ log.save = T
       if("aantal_toetsen" %in% colnames(algemeen) && !is.na(algemeen$aantal_toetsen[1])){
         aantal_toetsen <- algemeen$aantal_toetsen[1]
       } else {
-        aantal_toetsen <- length(results$sign)
+        aantal_toetsen <- length(results$sign[!is.na(results$sign)])
       }
-      
-      msg("Correctie voor multiple testing toegepast met methode %s", algemeen$multiple_testing_correction[1])
+      msg("Correctie voor multiple testing (aantal toetsen %f) toegepast met methode %s", aantal_toetsen, algemeen$multiple_testing_correction[1])
       results$sign <- p.adjust(results$sign, algemeen$multiple_testing_correction[1])
     }
     
@@ -890,6 +897,7 @@ log.save = T
     write.csv(var_labels, sprintf("resultaten_csv/varlabels_%s.csv", basename(config.file)), fileEncoding="UTF-8", row.names=F)
     write.csv(kolom_opbouw, sprintf("resultaten_csv/settings_%s.csv", basename(config.file)), fileEncoding="UTF-8", row.names=F)
     write.csv(results, sprintf("resultaten_csv/results_%s.csv", basename(config.file)), fileEncoding="UTF-8", row.names=F)
+    write.csv(fpc_data, sprintf("resultaten_csv/fpc_%s.csv", basename(config.file)), fileEncoding="UTF-8", row.names=F)
   }
   
   ##### begin wegschrijven tabellenboeken in Excel
