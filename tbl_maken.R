@@ -874,6 +874,12 @@ log.save = T
     
     # multiple testing correctie
     if("multiple_testing_correction" %in% colnames(algemeen) && !is.na(algemeen$multiple_testing_correction[1])){
+      if("aantal_toetsen" %in% colnames(algemeen) && !is.na(algemeen$aantal_toetsen[1])){
+        aantal_toetsen <- algemeen$aantal_toetsen[1]
+      } else {
+        aantal_toetsen <- length(results$sign)
+      }
+      
       msg("Correctie voor multiple testing toegepast met methode %s", algemeen$multiple_testing_correction[1])
       results$sign <- p.adjust(results$sign, algemeen$multiple_testing_correction[1])
     }
