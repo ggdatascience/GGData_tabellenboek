@@ -510,7 +510,7 @@ log.save = T
   # dit doen we uit te zoeken of we een fpc bestand hebben voor elke dataset,
   # dan dit te laden en te matchen met de oorspronkelijke stratumkolom (dus niet superstratum!)
   data$superstrata = NA
-  data$fpc = NA
+  data$fpc = NULL
   for (d in 1:nrow(datasets)) {
     dataset_columns = which(data$tbl_dataset == d) # welke kolommen in data gaan over dataset d, 'mijn kolommen'?
     strata = data$tbl_strata[dataset_columns] # wat zijn de strata van mijn kolommen?
@@ -564,7 +564,7 @@ log.save = T
       # voeg de fpc factor toe aan de data
       data$fpc[dataset_columns] <- fpc_per_respondent$fpc
     } else {
-      fpc_data <- "Geen FPC toegepast"
+      fpc_data <- NULL
     }
     for (i in 1:length(unique_strata)) {
       data$superstrata[dataset_columns & data$tbl_strata == unique_strata[i]] = d*1000 + i
@@ -824,7 +824,7 @@ log.save = T
                colnames(data)[str_starts(colnames(data), paste0("dummy.", var))], "superstrata", "superweegfactor", "fpc",
                "tbl_dataset", weight.factors)
       vars = unique(vars[!is.na(vars)])
-      data.tmp = data[,vars]
+      data.tmp = data %>% select(any_of(vars))
       
       # nu wordt het ingewikkeld: in de monitor VO zijn verschillende weegfactoren nodig per jaar
       # dit betekent dat we per variabele EN per dataset een andere weegfactor kunnen hebben
@@ -864,7 +864,13 @@ log.save = T
         }
       }
       
-      design = svydesign(ids=~1, strata=~superstrata, weights=~superweegfactor, fpc=~fpc, data=data.tmp)
+      # aanmaken van design, afhankelijk van of er fpc is.
+      if("fpc" %in% colnames(data.tmp)){
+        design = svydesign(ids=~1, strata=~superstrata, weights=~superweegfactor, fpc=~fpc, data=data.tmp)  
+      } else {
+        design = svydesign(ids=~1, strata=~superstrata, weights=~superweegfactor, data=data.tmp)
+      }
+      
       
       t.before = proc.time()["elapsed"]
       results = bind_rows(results, GetTableRow(var, design, kolom_opbouw, subsetmatches))
