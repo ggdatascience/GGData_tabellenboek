@@ -862,7 +862,7 @@ log.save = T
       }
       
       # aanmaken van design, afhankelijk van of er fpc is.
-      if("fpc" %in% colnames(data.tmp)){
+      if("fpc" %in% colnames(datasets) && !is.na(datasets$fpc[i])){
         design = svydesign(ids=~1, strata=~superstrata, weights=~superweegfactor, fpc=~fpc, data=data.tmp)  
       } else {
         design = svydesign(ids=~1, strata=~superstrata, weights=~superweegfactor, data=data.tmp)
