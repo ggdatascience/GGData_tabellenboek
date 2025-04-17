@@ -510,12 +510,15 @@ log.save = T
   # dit doen we uit te zoeken of we een fpc bestand hebben voor elke dataset,
   # dan dit te laden en te matchen met de oorspronkelijke stratumkolom (dus niet superstratum!)
   data$superstrata = NA
-  data$fpc = NULL
+  data$fpc = NA
+  fpc_data = NULL
   for (d in 1:nrow(datasets)) {
+    message(d)
     dataset_columns = which(data$tbl_dataset == d) # welke kolommen in data gaan over dataset d, 'mijn kolommen'?
     strata = data$tbl_strata[dataset_columns] # wat zijn de strata van mijn kolommen?
     unique_strata = sort(unique(strata)) # unique strata
     if("fpc" %in% colnames(datasets) && !is.na(datasets$fpc[d])){
+      if(is.na(datasets$stratum[d])){stop("Bij FPC is het verplicht een stratum op te geven.")}
       fpc_data <- table(strata) %>%
         as.data.frame %>% 
         rename(stratum = strata)
@@ -527,15 +530,16 @@ log.save = T
             join_by(stratum == stratum)
           ) %>% 
           mutate(fpc = populatiegrootte)
-      } else if(grepl("grootgewicht_", datasets$fpc[d])){
+      } else if(grepl("GROOTGEWICHT_", datasets$fpc[d])){
+        if(is.na(datasets$stratum[d])){stop("Bij FPC is het verplicht een stratum op te geven.")}
         # als er grote gewichten inzitten (die weergeven hoeveel mensen een respondent vertegenwoordigd)
         # dan kan je populatiegroottes afleiden daaruit
         fpc_data <- fpc_data %>% 
           left_join(
             data %>%
-              group_by(PrimaireEenheid) %>%
-              summarise(populatiegrootte = sum(!!sym(gsub("grootgewicht_", "", datasets$fpc[d])), na.rm = TRUE)), 
-            join_by(stratum == PrimaireEenheid)
+              group_by(!!sym(datasets$stratum[d])) %>%
+              summarise(populatiegrootte = sum(!!sym(gsub("GROOTGEWICHT_", "", datasets$fpc[d])), na.rm = TRUE)), 
+            join_by(stratum == !!sym(datasets$stratum[d]))
           ) %>% 
           mutate(
             fpc = populatiegrootte
@@ -548,19 +552,12 @@ log.save = T
         # anders: onbekende methode, geef fout
         msg("FPC is aangegeven maar onbekende FPC kolom input '%s'. Zie handleiding voor opties.", datasets$fpc[d], level=ERR)
       }
-      # se correctie factor berekenen
-      fpc_data <- fpc_data %>% 
-        mutate(
-          correctie_se = sqrt((populatiegrootte - Freq) / (populatiegrootte - 1))
-        )
-      
       # merge zodat we voor elke respondent een sampling prob hebben
       fpc_per_respondent <- data.frame(
         stratum = strata %>% as.factor
       ) %>% left_join(
         fpc_data
       )
-      
       # voeg de fpc factor toe aan de data
       data$fpc[dataset_columns] <- fpc_per_respondent$fpc
     } else {
