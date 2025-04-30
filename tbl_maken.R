@@ -502,14 +502,69 @@ log.save = T
     }
   }
   
-  # superstrata maken
+  # superstrata maken en fpc correctiefactoren
+  # superstrata
   # dit doen we door de bestaande strata te nummeren van 1-<aantal> en daar 1000 * dataset bij te doen
   # dus stratum 40 uit dataset 1 wordt 1040, stratum 25 uit dataset 2 wordt 2025, enz.
+  # fpc correctie factoren
+  # dit doen we uit te zoeken of we een fpc bestand hebben voor elke dataset,
+  # dan dit te laden en te matchen met de oorspronkelijke stratumkolom (dus niet superstratum!)
   data$superstrata = NA
+  data$fpc = NA
+  fpc_data = NULL
   for (d in 1:nrow(datasets)) {
-    strata = sort(unique(data$tbl_strata[data$tbl_dataset == d]))
-    for (i in 1:length(strata)) {
-      data$superstrata[data$tbl_dataset == d & data$tbl_strata == strata[i]] = d*1000 + i
+    message(d)
+    dataset_columns = which(data$tbl_dataset == d) # welke kolommen in data gaan over dataset d, 'mijn kolommen'?
+    strata = data$tbl_strata[dataset_columns] # wat zijn de strata van mijn kolommen?
+    unique_strata = sort(unique(strata)) # unique strata
+    if("fpc" %in% colnames(datasets) && !is.na(datasets$fpc[d])){
+      if(is.na(datasets$stratum[d])){stop("Bij FPC is het verplicht een stratum op te geven.")}
+      fpc_data <- table(strata) %>%
+        as.data.frame %>% 
+        rename(stratum = strata)
+      if(file.exists(datasets$fpc[d])){
+        # als het een pad is: zoek de fpc data op en berekenen sampling prob per stratum
+          fpc_data <- fpc_data %>% left_join(
+            read.xlsx(datasets$fpc[d]) %>% 
+              mutate(stratum = as.factor(stratum)),
+            join_by(stratum == stratum)
+          ) %>% 
+          mutate(fpc = populatiegrootte)
+      } else if(grepl("GROOTGEWICHT_", datasets$fpc[d])){
+        if(is.na(datasets$stratum[d])){stop("Bij FPC is het verplicht een stratum op te geven.")}
+        # als er grote gewichten inzitten (die weergeven hoeveel mensen een respondent vertegenwoordigd)
+        # dan kan je populatiegroottes afleiden daaruit
+        fpc_data <- fpc_data %>% 
+          left_join(
+            data %>%
+              group_by(!!sym(datasets$stratum[d])) %>%
+              summarise(populatiegrootte = sum(!!sym(gsub("GROOTGEWICHT_", "", datasets$fpc[d])), na.rm = TRUE)), 
+            join_by(stratum == !!sym(datasets$stratum[d]))
+          ) %>% 
+          mutate(
+            fpc = populatiegrootte
+          )
+        
+      } else if(datasets$fpc[d] %in% colnames(data)){
+        # als de fpc correctiefactor gewoon een kolom is, dan die overnemen
+        fpc_per_respondent <- data.frame(fpc = data %>% select(!!sym(datasets$fpc[d])))
+      } else {
+        # anders: onbekende methode, geef fout
+        msg("FPC is aangegeven maar onbekende FPC kolom input '%s'. Zie handleiding voor opties.", datasets$fpc[d], level=ERR)
+      }
+      # merge zodat we voor elke respondent een sampling prob hebben
+      fpc_per_respondent <- data.frame(
+        stratum = strata %>% as.factor
+      ) %>% left_join(
+        fpc_data
+      )
+      # voeg de fpc factor toe aan de data
+      data$fpc[dataset_columns] <- fpc_per_respondent$fpc
+    } else {
+      fpc_data <- NULL
+    }
+    for (i in 1:length(unique_strata)) {
+      data$superstrata[dataset_columns & data$tbl_strata == unique_strata[i]] = d*1000 + i
     }
   }
   
@@ -749,125 +804,6 @@ log.save = T
   if (calc.results) {
     source(paste0(dirname(this.path()), "/tbl_GetTableRow.R"))
     results = data.frame()
-    
-    ##################### BEGIN ONGEBRUIKTE CODE
-    # dit is een project wat we ergens na VO willen toevoegen
-    # voor nu wordt dit in zijn geheel overgeslagen, vandaar de if (F)
-    # TODO: parallel proberen te maken
-    if (F) {
-      # berekeningen kunnen parallel worden uitgevoerd met multithreading
-      # hierdoor worden meerdere processorkernen ingezet om de berekeningen uit te voeren
-      # (dit kan handig zijn, omdat survey een bijzonder traag pakket is)
-      
-      clus = makeCluster(detectCores())
-      registerDoParallel(clus)
-      
-      
-      #### poging met plyr
-      results = data.frame()
-      
-      PrepdataForSurveyAndGetTableRow = function(
-    var,
-    data.in,
-    kolom_opbouw.in,
-    subsetmatches.in
-      ){
-        source("tbl_GetTableRow.R")
-        source("tbl_helpers.R")
-        options(survey.lonely.psu="certainty")
-        vars = c(var, kolom_opbouw.in$crossing, kolom_opbouw.in$subset, colnames(data.in)[str_starts(colnames(data.in), "dummy._col")],
-                 colnames(data.in)[str_starts(colnames(data.in), paste0("dummy.", var))], "superstrata", "superweegfactor")
-        vars = unique(vars[!is.na(vars)])
-        data.in.tmp = data.in[,vars]
-        design = svydesign(ids=~1, strata=data.in.tmp$superstrata, weights=data.in.tmp$superweegfactor, data=data.in.tmp)
-        return(GetTableRow(var, design, kolom_opbouw.in, subsetmatches.in, F))
-      }
-      
-      out <- alply(
-        .data = varlist,
-        .margins = 1,
-        .fun = PrepdataForSurveyAndGetTableRow,
-        data.in = data,
-        kolom_opbouw.in = kolom_opbouw,
-        subsetmatches.in = subsetmatches,
-        .parallel = algemeen$multithreading,
-        .paropts = list(
-          .packages = c("survey", "tidyverse", "labelled")
-        ),
-        .progress = progress_time()
-      )
-      
-      results <- out %>% reduce(.f = bind_rows)
-      
-      stopCluster(clus)
-      
-      
-      #### poging met foreach
-      clus = makeCluster(detectCores())
-      registerDoParallel(clus)
-      
-      t.start = proc.time()["elapsed"]
-      results = foreach(var=varlist, .combine=bind_rows, .packages=c("tidyverse", "survey", "labelled")) %dopar% {
-        var = varlist$inhoud[i]
-        # we kunnen de dataset die de functie in moet flink verkleinen; alle variabelen
-        # behalve [var], dummy._col[1:n], dummy.[var], de subsets en de crossings kunnen eruit
-        vars = c(var, kolom_opbouw$crossing, kolom_opbouw$subset, colnames(data)[str_starts(colnames(data), "dummy._col")],
-                 colnames(data)[str_starts(colnames(data), paste0("dummy.", var))], "superstrata", "superweegfactor",
-                 "tbl_dataset", weight.factors)
-        vars = unique(vars[!is.na(vars)])
-        data.tmp = data[,vars]
-        
-        # nu wordt het ingewikkeld: in de monitor VO zijn verschillende weegfactoren nodig per jaar
-        # dit betekent dat we per variabele EN per dataset een andere weegfactor kunnen hebben
-        # daarvoor kan een combinatieweegfactor gemaakt worden, als er gewerkt wordt met één groot combinatiebestand,
-        # of er kan een 'superweegfactor' gemaakt worden, gelijkend aan de superweegfactor die door combinatie hierboven ontstaan is
-        # aangezien niet alle GGD'en een overkoepelend bestand hebben is hier gekozen voor de tweede optie
-        # gezien de complexiteit wordt deze code lelijk, daar is helaas weinig aan te doen
-        
-        if (any(str_detect(colnames(varlist), "weegfactor"))) {
-          # tijd om te huilen
-          # mogelijke opties:
-          # "weegfactor" -> override voor die variabele
-          # "weegfactor.d[getal]" -> override voor die variabele in dataset [getal]
-          # "weegfactor.d_[naam]" -> override voor die variabele in dataset [naam]
-          weegfactorvars = str_match(colnames(varlist), "weegfactor(.*)")
-          weegfactorvars = weegfactorvars[!is.na(weegfactorvars)[,1],]
-          
-          for (j in 1:nrow(weegfactorvars)) {
-            wfname = weegfactorvars[j,1]
-            wfdataset = weegfactorvars[j,2]
-            
-            if (wfname == "weegfactor" && !is.na(varlist$weegfactor[j])) {
-              data.tmp$superweegfactor = data.tmp[[varlist$weegfactor[j]]]
-            } else if (!is.na(varlist[[wfname]][i]) && str_detect(wfdataset, "^\\.d(\\d+)$")) { # numeriek, dus d[getal]
-              dataset = as.numeric(str_match(wfdataset, "(\\d+)")[,2])
-              data.tmp$superweegfactor[data.tmp$tbl_dataset == dataset] = data.tmp[[varlist[[wfname]][j]]][data.tmp$tbl_dataset == dataset]
-            } else if (!is.na(varlist[[wfname]][i]) && str_detect(wfdataset, "^\\.d_(.+)")) { # naam van een dataset
-              dataset = str_match(wfdataset, "^\\.d_(.+)")[,2]
-              if (!dataset %in% datasets$naam_dataset) {
-                msg("Er is een weegfactor opgegeven in indeling_rijen voor dataset %s, maar deze dataset is niet bekend. Controleer de configuratie.", dataset, level=ERR)
-              }
-              dataset = which(datasets$naam_dataset == dataset)
-              data.tmp$superweegfactor[data.tmp$tbl_dataset == dataset] = data.tmp[[varlist[[wfname]][j]]][data.tmp$tbl_dataset == dataset]
-            } else if (!is.na(varlist[[wfname]][i])) {
-              msg("Onbekende weegfactordefinitie opgegeven: %s. Controleer de configuratie.", wfname, level=ERR)
-            }
-          }
-        }
-        
-        design = svydesign(ids=~1, strata=data.tmp$superstrata, weights=data.tmp$superweegfactor, data=data.tmp)
-        
-        results = bind_rows(results, GetTableRow(var, design, kolom_opbouw, subsetmatches, F))
-      }
-      t.end = proc.time()["elapsed"]
-      msg("Totale rekentijd %0.2f min voor %d variabelen. Gemiddelde tijd per variabele was %0.1f sec.",
-          (t.end-t.start)/60, nrow(varlist), t.end-t.start/nrow(varlist), level=MSG)
-      
-      stopCluster(clus)
-    }
-    ##################### EINDE ONGEBRUIKTE CODE
-    
-    results = data.frame()
     t.start = proc.time()["elapsed"]
     t.vars = c()
     for (i in 1:nrow(varlist)) {
@@ -881,10 +817,10 @@ log.save = T
       # we kunnen de dataset die de functie in moet flink verkleinen; alle variabelen
       # behalve [var], dummy._col[1:n], dummy.[var], de subsets en de crossings kunnen eruit
       vars = c(var, kolom_opbouw$crossing, kolom_opbouw$subset, colnames(data)[str_starts(colnames(data), "dummy._col")],
-               colnames(data)[str_starts(colnames(data), paste0("dummy.", var))], "superstrata", "superweegfactor",
+               colnames(data)[str_starts(colnames(data), paste0("dummy.", var))], "superstrata", "superweegfactor", "fpc",
                "tbl_dataset", weight.factors)
       vars = unique(vars[!is.na(vars)])
-      data.tmp = data[,vars]
+      data.tmp = data %>% select(any_of(vars))
       
       # nu wordt het ingewikkeld: in de monitor VO zijn verschillende weegfactoren nodig per jaar
       # dit betekent dat we per variabele EN per dataset een andere weegfactor kunnen hebben
@@ -924,7 +860,13 @@ log.save = T
         }
       }
       
-      design = svydesign(ids=~1, strata=data.tmp$superstrata, weights=data.tmp$superweegfactor, data=data.tmp)
+      # aanmaken van design, afhankelijk van of er fpc is.
+      if("fpc" %in% colnames(datasets) && !is.na(datasets$fpc[i])){
+        design = svydesign(ids=~1, strata=~superstrata, weights=~superweegfactor, fpc=~fpc, data=data.tmp)  
+      } else {
+        design = svydesign(ids=~1, strata=~superstrata, weights=~superweegfactor, data=data.tmp)
+      }
+      
       
       t.before = proc.time()["elapsed"]
       results = bind_rows(results, GetTableRow(var, design, kolom_opbouw, subsetmatches))
@@ -940,12 +882,24 @@ log.save = T
     # aangezien een tweede subset vaker kan draaien moeten we hier een distinct op doen
     results = results %>% distinct()
     
+    # multiple testing correctie
+    if("multiple_testing_correction" %in% colnames(algemeen) && !is.na(algemeen$multiple_testing_correction[1])){
+      if("aantal_toetsen" %in% colnames(algemeen) && !is.na(algemeen$aantal_toetsen[1])){
+        aantal_toetsen <- algemeen$aantal_toetsen[1]
+      } else {
+        aantal_toetsen <- length(results$sign[!is.na(results$sign)])
+      }
+      msg("Correctie voor multiple testing (aantal toetsen %d) toegepast met methode %s", aantal_toetsen, algemeen$multiple_testing_correction[1])
+      results$sign <- p.adjust(results$sign, algemeen$multiple_testing_correction[1])
+    }
+    
     # resultaten opslaan voor hergebruik
     # N.B.: alles in UTF-8 om problemen met een trema o.i.d. te voorkomen
     write.csv(varlist, sprintf("resultaten_csv/vars_%s.csv", basename(config.file)), fileEncoding="UTF-8", row.names=F)
     write.csv(var_labels, sprintf("resultaten_csv/varlabels_%s.csv", basename(config.file)), fileEncoding="UTF-8", row.names=F)
     write.csv(kolom_opbouw, sprintf("resultaten_csv/settings_%s.csv", basename(config.file)), fileEncoding="UTF-8", row.names=F)
     write.csv(results, sprintf("resultaten_csv/results_%s.csv", basename(config.file)), fileEncoding="UTF-8", row.names=F)
+    write.csv(fpc_data, sprintf("resultaten_csv/fpc_%s.csv", basename(config.file)), fileEncoding="UTF-8", row.names=F)
   }
   
   ##### begin wegschrijven tabellenboeken in Excel
