@@ -803,7 +803,6 @@ log.save = T
   
   if (calc.results) {
     source(paste0(dirname(this.path()), "/tbl_GetTableRow.R"))
-    
     results = data.frame()
     t.start = proc.time()["elapsed"]
     t.vars = c()
