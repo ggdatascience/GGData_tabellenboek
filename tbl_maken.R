@@ -568,6 +568,11 @@ log.save = T
     }
   }
   
+  if("fpc" %in% colnames(datasets) && any(is.na(data$fpc))){
+    msg("FPC is maar voor een deel van datasets ingegeven. Er wordt aangenomen dat FPC voor andere datasets niet nodig is.", level=MSG)
+    data$fpc[is.na(data$fpc)] <- 1e6
+  }
+  
   data$superweegfactor = data$tbl_weegfactor
   # missende weegfactoren mag niet, wat is het beleid?
   # mogelijke configuraties:
@@ -859,9 +864,9 @@ log.save = T
           }
         }
       }
-      
+
       # aanmaken van design, afhankelijk van of er fpc is.
-      if("fpc" %in% colnames(datasets) && !is.na(datasets$fpc[i])){
+      if("fpc" %in% colnames(datasets)){
         design = svydesign(ids=~1, strata=~superstrata, weights=~superweegfactor, fpc=~fpc, data=data.tmp)  
       } else {
         design = svydesign(ids=~1, strata=~superstrata, weights=~superweegfactor, data=data.tmp)
