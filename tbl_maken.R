@@ -526,6 +526,8 @@ log.save = T
     message(d)
     dataset_columns = which(data$tbl_dataset == d) # welke kolommen in data gaan over dataset d, 'mijn kolommen'?
     strata = data$tbl_strata[dataset_columns] # wat zijn de strata van mijn kolommen?
+    data$tbl_strata[dataset_columns] = paste(strata, "_d", d) # pas strata namen aan zodat ze niet verward worden tussen datasets.
+    strata = data$tbl_strata[dataset_columns] # opnieuw binnenhalen voor later gebruik
     unique_strata = sort(unique(strata)) # unique strata
     if("fpc" %in% colnames(datasets) && !is.na(datasets$fpc[d])){
       if(is.na(datasets$stratum[d])){stop("Bij FPC is het verplicht een stratum op te geven.")}
