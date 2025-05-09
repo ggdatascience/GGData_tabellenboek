@@ -170,7 +170,7 @@ BuildHtmlTableRows = function (input, col.design, n=F) {
 # template = template_html
 # i = 7
 
-MakeHtml = function (results, var_labels, col.design, subset, subset.val, subsetmatches, n_resp, template) {
+MakeHtml = function (results, var_labels, col.design, subset, subset.val, subsetmatches, n_resp, template, filename) {
   subset.name = names(subset.val)
   subset.val = unname(subset.val)
   
@@ -345,7 +345,7 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
     
     # html voor titels en koppen toevoegen
     intro_tekst$inhoud[intro_tekst$type == "titel"] = sprintf("<h1>%s</h1>", HTMLencode(intro_tekst$inhoud[intro_tekst$type == "titel"]))
-    intro_tekst$inhoud[intro_tekst$type == "kop"] = sprintf("<h2>%s</h2>", HTMLencode(intro_tekst$inhoud[intro_tekst$type == "kop"]))
+    intro_tekst$inhoud[intro_tekst$type == "kop"] = sprintf("<h3>%s</h3>", HTMLencode(intro_tekst$inhoud[intro_tekst$type == "kop"]))
     intro_tekst$inhoud[intro_tekst$type != "titel" & intro_tekst$type != "kop"] = HTMLencode(intro_tekst$inhoud[intro_tekst$type != "titel" & intro_tekst$type != "kop"])
     # lege waarden worden geprint als NA; dat willen we niet
     intro_tekst$inhoud[is.na(intro_tekst$inhoud)] = ""
@@ -437,7 +437,7 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
         output = sprintf("<h3 class=\"heading\" id=\"heading_%d\">%s</h3>", i, HTMLencode(output))
       } else if (indeling_rijen$type[i] == "vraag") {
         question.cache = HTMLencode(output)
-        output = sprintf("<h3 class=\"heading vraag\" id=\"heading_%d\">%s</h3>", i, HTMLencode(output))
+        output = sprintf("<h4 class=\"heading vraag\" id=\"heading_%d\">%s</h4>", i, HTMLencode(output))
       } else { # tekst
         output = sprintf("%s<br />", ifelse(is.na(output), "", HTMLencode(output)))
       }
@@ -655,7 +655,7 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
         }
         
         # tabel invoegen
-        table.output = c(table.output, paste0("<h3 class=\"vraag\">", HTMLencode(var_labels$label[var_labels$var == indeling_rijen$inhoud[i] & var_labels$val == "var"]), "</h3>",
+        table.output = c(table.output, paste0("<h4 class=\"vraag\">", HTMLencode(var_labels$label[var_labels$var == indeling_rijen$inhoud[i] & var_labels$val == "var"]), "</h4>",
                                               "<table>\r\n",
                                               # titel van de vraag toevoegen
                                               "<caption>", var_labels$label[var_labels$var == indeling_rijen$inhoud[i] & var_labels$val == "var"], "</caption>\r\n",
@@ -766,8 +766,8 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
   # en als laatste... opslaan!
   tryCatch({
     #saveWorkbook(wb, sprintf("output/%s.xlsx", subset.name), overwrite=T)
-    cat(template, file=sprintf("output/%s.html", str_replace(subset.name, "\\\\|/", " ")))
-    msg("Digitoegankelijk tabellenboek voor %s opgeslagen.", subset.name, level=MSG)
+    cat(template, file=sprintf("output/%s.html", str_replace(filename, "\\\\|/", " ")))
+    msg("Digitoegankelijk tabellenboek voor %s opgeslagen.", filename, level=MSG)
   },
   error = function(e){
     msg("Er is een fout opgetreden bij het maken van het digitoegankelijke tabellenboek: %s", e$message, level=MSG)
