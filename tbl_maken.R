@@ -300,6 +300,16 @@ log.save = T
               old_labels = data.frame(val=as.numeric(unname(val_labels(data[[c]]))), label=names(val_labels(data[[c]])))
               old_values = to_character(data[[c]])
               new_values = sapply(old_values, function (value) { return(old_labels$val[which(old_labels$label == value)]) })
+              # in sommige versies van R volgt hier alsnog een lijst uit, ook al is sapply() de vectorversie
+              # als dat gebeurt, en er een missing is in de waardes, dan komt er een NULL in de lijst, ipv een NA
+              # hierdoor komt er uit unlist() dan een vector met minder waardes dan de originele lijst, en dan explodeert alles
+              # zie ook https://stackoverflow.com/questions/60812923/unlist-a-list-without-losing-nulls
+              # oplossing: indien new_values een lijst is, vervangen we alle NULLs door NA, en dan klopt het weer
+              # dit kan door lengths(x) == 0 te doen
+              if (is.list(new_values)) {
+                new_values[lengths(new_values) == 0] = NA
+                new_values = new_values %>% unlist()
+              }
               new_labels = old_labels$val
               names(new_labels) = old_labels$label
               new_labels = sort(new_labels)
