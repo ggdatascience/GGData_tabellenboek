@@ -516,7 +516,7 @@ log.save = T
     message(d)
     dataset_columns = which(data$tbl_dataset == d) # welke kolommen in data gaan over dataset d, 'mijn kolommen'?
     strata = data$tbl_strata[dataset_columns] # wat zijn de strata van mijn kolommen?
-    data$tbl_strata[dataset_columns] = paste(strata, "_d", d) # pas strata namen aan zodat ze niet verward worden tussen datasets.
+    data$tbl_strata[dataset_columns] = paste0(strata, "_d", d) # pas strata namen aan zodat ze niet verward worden tussen datasets.
     strata = data$tbl_strata[dataset_columns] # opnieuw binnenhalen voor later gebruik
     unique_strata = sort(unique(strata)) # unique strata
     if("fpc" %in% colnames(datasets) && !is.na(datasets$fpc[d])){
@@ -536,12 +536,15 @@ log.save = T
         if(is.na(datasets$stratum[d])){stop("Bij FPC is het verplicht een stratum op te geven.")}
         # als er grote gewichten inzitten (die weergeven hoeveel mensen een respondent vertegenwoordigd)
         # dan kan je populatiegroottes afleiden daaruit
+        
         fpc_data <- fpc_data %>% 
           left_join(
             data %>%
-              group_by(!!sym(datasets$stratum[d])) %>%
+              group_by(tbl_strata) %>%
+              #group_by(!!sym(datasets$stratum[d])) %>%
               summarise(populatiegrootte = sum(!!sym(gsub("GROOTGEWICHT_", "", datasets$fpc[d])), na.rm = TRUE)), 
-            join_by(stratum == !!sym(datasets$stratum[d]))
+            join_by(stratum == tbl_strata)
+            #join_by(stratum == !!sym(datasets$stratum[d]))
           ) %>% 
           mutate(
             fpc = populatiegrootte
@@ -560,6 +563,7 @@ log.save = T
       ) %>% left_join(
         fpc_data
       )
+      
       # voeg de fpc factor toe aan de data
       data$fpc[dataset_columns] <- fpc_per_respondent$fpc
     } else {
