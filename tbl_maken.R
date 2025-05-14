@@ -551,10 +551,8 @@ log.save = T
           left_join(
             data %>%
               group_by(tbl_strata) %>%
-              #group_by(!!sym(datasets$stratum[d])) %>%
               summarise(populatiegrootte = sum(!!sym(gsub("GROOTGEWICHT_", "", datasets$fpc[d])), na.rm = TRUE)), 
             join_by(stratum == tbl_strata)
-            #join_by(stratum == !!sym(datasets$stratum[d]))
           ) %>% 
           mutate(
             fpc = populatiegrootte
