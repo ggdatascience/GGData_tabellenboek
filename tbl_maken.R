@@ -1,5 +1,4 @@
 #
-#
 # Dit script maakt tabellenboeken op basis van gezondheidsmonitors. 
 # De configuratie gaat middels een Excelsheet, zie bijgevoegde documentatie.
 # Problemen en verzoeken kunnen worden ingediend op:
@@ -523,7 +522,6 @@ log.save = T
   data$fpc = NA
   fpc_data = NULL
   for (d in 1:nrow(datasets)) {
-    message(d)
     dataset_columns = which(data$tbl_dataset == d) # welke kolommen in data gaan over dataset d, 'mijn kolommen'?
     strata = data$tbl_strata[dataset_columns] # wat zijn de strata van mijn kolommen?
     data$tbl_strata[dataset_columns] = paste0(strata, "_d", d) # pas strata namen aan zodat ze niet verward worden tussen datasets.
@@ -569,8 +567,21 @@ log.save = T
       fpc_per_respondent <- data.frame(
         stratum = strata %>% as.factor
       ) %>% left_join(
-        fpc_data
+        fpc_data,
+        join_by(stratum==stratum)
       )
+      is_small_strata <- fpc_per_respondent$Freq >= fpc_per_respondent$populatiegrootte
+      if(any(is_small_strata)){
+        msg("Er bevinden zich kleine strata in de data waarvoor de geschatte populatiegrootte kleiner is dan aantal respondenten. Er wordt nu aangenomen dat de populatiegrootte gelijk is aan aantal respondenten. Het gaat om:", level=MSG)
+        fpc_per_respondent <- fpc_per_respondent %>% 
+          mutate(
+          fpc = case_when(
+            fpc < Freq ~ Freq,
+            T ~ fpc
+          )
+        )
+        print(fpc_per_respondent[is_small_strata,])
+      }
       
       # voeg de fpc factor toe aan de data
       data$fpc[dataset_columns] <- fpc_per_respondent$fpc
