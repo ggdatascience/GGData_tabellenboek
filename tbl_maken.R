@@ -928,23 +928,63 @@ log.save = T
   basefilename = coalesce(opmaak$waarde[opmaak$type == "naam_tabellenboek"], "Overzicht")
   
   # multiple testing correctie, indien gewenst
-  # we slaan de ongecorrigeerde significantie op voor later gebruik, omdat meermaals uitvoeren anders tot problemen zou leiden (d.w.z. 2x corrigeren bij opnieuw uitvoeren)
-  if("multiple_testing_correction" %in% colnames(algemeen) && !is.na(algemeen$multiple_testing_correction)){
-    if (!"sign_uncorrected" %in% colnames(results)) {
-      results$sign_uncorrected = results$sign
+  # normaliter zou je hiervoor p.adjust() kunnen gebruiken, maar er is een probleem;
+  # doordat we een rij hebben per losse waarde en per crossingwaarde krijg je een artificieel hoog aantal testen, wat niet daadwerkelijk zo is
+  # ter voorbeeld: stel dat er 1 crossing is (man/vrouw) voor een vraag met 3 antwoorden, dan zijn er totaal 6 p-waardes; A1 m/v, A2 m/v, A3 m/v (A = antwoord)
+  # dit registreert in p.adjust() dan als 6 testen, terwijl er in de realiteit 3 zijn uitgevoerd; A1 m vs. v, A2 m vs. v, A3 m vs. v
+  # we moeten dus terugrekenen hoeveel testen er daadwerkelijk zijn uitgevoerd
+  # concreet betekent dit:
+  # -> voor iedere rij waarin sign.vs != NA (want anders is er sowieso geen toets uitgevoerd)
+  # -> deel door aantal crossings, indien aanwezig
+  # -> deel door 2 indien dichotoom (makkelijk te herkennen aan precies 2 antwoordmogelijkheden en gelijke p-waarde)
+  # dit is met p.adjust() lastig te corrigeren, dus in plaats daarvan kunnen we gewoon de gewenste p-waarde aanpassen
+  # stiekem overschrijven we algemeen$confidence_level dan met de gecorrigeerde afkapwaarde
+  if("multiple_testing_correction" %in% colnames(algemeen) && !is.na(algemeen$multiple_testing_correction) && !"confidence_level_orig" %in% colnames(algemeen)) {
+    # om te voorkomen dat deze berekening 2x gedaan wordt
+    algemeen$confidence_level_orig = algemeen$confidence_level
+    
+    sign_indexes = !is.na(results$sign.vs)
+    sign_tests = results[sign_indexes,] %>%
+      group_by(subset, subset.val, year, crossing, crossing.val, var, sign.vs, sign) %>%
+      summarize(n=n()) %>%
+      group_by(subset, subset.val, year, crossing, var, sign.vs, sign) %>%
+      summarize(n_total=sum(n), crossing_n=n(), n=n_total/crossing_n)
+    # op dit punt hebben we een tabel met precies de uitgevoerde toetsen;
+    # - crossings hebben een n_total van [aantal antwoordmogelijkheden * aantal crossings] en een n van [aantal antwoordmogelijkheden]
+    # - dichotome variabelen hebben een n van 2 (dus gelijk aan crossings, indien n 2 is)
+    # hierdoor kunnen we simpelweg het aantal rijen tellen, en dan hebben we het aantal testen
+    n_sign_tests = nrow(sign_tests)
+    
+    if ("aantal_toetsen" %in% colnames(algemeen) && !is.na(algemeen$aantal_toetsen)) {
+      n_sign_tests = algemeen$aantal_toetsen
+      msg("Let op! Het aantal toetsen voor de multiple testing correction is vanuit de configuratie omgezet van %d naar %d. Als dit niet de bedoeling is, pas dan de configuratie aan.",
+          nrow(sign_tests), n_sign_tests, level=WARN)
+    }
+    
+    if (algemeen$multiple_testing_correction == "BH") {
+      pvals = sort(sign_tests$sign)
+      pvals = pvals[!is.na(pvals)]
       
-      # nu moeten we nog even goochelen; alleen rijen waarbij daadwerkelijk een berekening is gedaan tellen mee
-      # dus alles waar sign.vs == NA kunnen we skippen
-      sign_indexes = !is.na(results$sign.vs)
+      bh.table = matrix(nrow = n_sign_tests, ncol = 3)
+      bh.table[,1] = pvals
+      bh.table[,2] = 1:n_sign_tests
+      bh.table[,3] = (bh.table[,2]/n_sign_tests)*algemeen$confidence_level_orig
       
-      # de n van p.adjust mag niet lager zijn dan length(x), dus dat moeten we controleren
-      aantal_toetsen = sum(sign_indexes)
-      if("aantal_toetsen" %in% colnames(algemeen) && !is.na(algemeen$aantal_toetsen) && algemeen$aantal_toetsen > aantal_toetsen){
-        aantal_toetsen <- algemeen$aantal_toetsen
-      } 
-      
-      msg("Correctie voor multiple testing (aantal toetsen %d) toegepast met methode %s", aantal_toetsen, algemeen$multiple_testing_correction)
-      results$sign[sign_indexes] <- p.adjust(results$sign[sign_indexes], algemeen$multiple_testing_correction, n=aantal_toetsen)
+      if (sum(bh.table[,1] < bh.table[,3]) < 1) {
+        # geen enkele significante waarde
+        algemeen$confidence_level = 1e-20
+        msg("Na Benjamini-Hochberg-correctie is er geen enkele p-waarde significant. De afkapwaarde voor significantie is daarom ingesteld op 1e-20.", level=WARN)
+      } else {
+        algemeen$confidence_level = max(bh.table[bh.table[,1] < bh.table[,3],1])
+        msg("De gewenste afkapwaarde voor significantie is met Benjamini-Hochberg-correctie op basis van %d toetsen aangepast van %e naar %e.",
+            n_sign_tests, algemeen$confidence_level_orig, algemeen$confidence_level, level=MSG)
+      }
+    } else if (algemeen$multiple_testing_correction == "bonferroni") {
+      algemeen$confidence_level = algemeen$confidence_level / n_sign_tests
+      msg("De gewenste afkapwaarde voor significantie is met Bonferroni-correctie op basis van %d toetsen aangepast van %e naar %e.",
+          n_sign_tests, algemeen$confidence_level_orig, algemeen$confidence_level, level=MSG)
+    } else {
+      msg("Er is geen geldige waarde opgegeven voor multiple_testing_correction. Geldigde waardes zijn 'BH' voor Benjamini-Hochberg of 'bonferroni' voor Bonferroni.", level=ERR)
     }
   }
   
