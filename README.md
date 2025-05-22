@@ -17,4 +17,4 @@ Nu wordt de repository naar de gekozen map gedownload. Het is vervolgens heel ma
 
 **OPTIE 2: HANDMATIG DOWNLOADEN**
 
-Dit kun je doen door op de groene knop rechtsbovenin klikken (<> Code), en dan op Download ZIP.
+Dit kun je doen door op de groene knop rechtsbovenin te klikken (<> Code), en dan op Download ZIP.
