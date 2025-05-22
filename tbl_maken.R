@@ -912,17 +912,6 @@ log.save = T
     # aangezien een tweede subset vaker kan draaien moeten we hier een distinct op doen
     results = results %>% distinct()
     
-    # multiple testing correctie
-    if("multiple_testing_correction" %in% colnames(algemeen) && !is.na(algemeen$multiple_testing_correction[1])){
-      if("aantal_toetsen" %in% colnames(algemeen) && !is.na(algemeen$aantal_toetsen[1])){
-        aantal_toetsen <- algemeen$aantal_toetsen[1]
-      } else {
-        aantal_toetsen <- length(results$sign[!is.na(results$sign)])
-      }
-      msg("Correctie voor multiple testing (aantal toetsen %d) toegepast met methode %s", aantal_toetsen, algemeen$multiple_testing_correction[1])
-      results$sign <- p.adjust(results$sign, algemeen$multiple_testing_correction[1])
-    }
-    
     # resultaten opslaan voor hergebruik
     # N.B.: alles in UTF-8 om problemen met een trema o.i.d. te voorkomen
     write.csv(varlist, sprintf("resultaten_csv/vars_%s.csv", basename(config.file)), fileEncoding="UTF-8", row.names=F)
@@ -932,8 +921,29 @@ log.save = T
     write.csv(fpc_data, sprintf("resultaten_csv/fpc_%s.csv", basename(config.file)), fileEncoding="UTF-8", row.names=F)
   }
   
-  ##### begin wegschrijven tabellenboeken in Excel
-  basefilename <- opmaak %>% filter(type == "naam_tabellenboek") %>% pull(waarde)
+  ##### begin wegschrijven tabellenboeken
+  basefilename = coalesce(opmaak$waarde[opmaak$type == "naam_tabellenboek"], "Overzicht")
+  
+  # multiple testing correctie, indien gewenst
+  # we slaan de ongecorrigeerde significantie op voor later gebruik, omdat meermaals uitvoeren anders tot problemen zou leiden (d.w.z. 2x corrigeren bij opnieuw uitvoeren)
+  if("multiple_testing_correction" %in% colnames(algemeen) && !is.na(algemeen$multiple_testing_correction)){
+    if (!"sign_uncorrected" %in% colnames(results)) {
+      results$sign_uncorrected = results$sign
+      
+      # nu moeten we nog even goochelen; alleen rijen waarbij daadwerkelijk een berekening is gedaan tellen mee
+      # dus alles waar sign.vs == NA kunnen we skippen
+      sign_indexes = !is.na(results$sign.vs)
+      
+      # de n van p.adjust mag niet lager zijn dan length(x), dus dat moeten we controleren
+      aantal_toetsen = sum(sign_indexes)
+      if("aantal_toetsen" %in% colnames(algemeen) && !is.na(algemeen$aantal_toetsen) && algemeen$aantal_toetsen > aantal_toetsen){
+        aantal_toetsen <- algemeen$aantal_toetsen
+      } 
+      
+      msg("Correctie voor multiple testing (aantal toetsen %d) toegepast met methode %s", aantal_toetsen, algemeen$multiple_testing_correction)
+      results$sign[sign_indexes] <- p.adjust(results$sign[sign_indexes], algemeen$multiple_testing_correction, n=aantal_toetsen)
+    }
+  }
   
   if (!is.na(algemeen$template_html)) {
     # uitdraaien tabellenboeken in HTML-vorm voor digitoegankelijkheid
@@ -961,7 +971,7 @@ log.save = T
     }
   }
   
-  # uitdraaien tabellenboeken
+  # uitdraaien tabellenboeken in Excel
   source(paste0(dirname(this.path()), "/tbl_MakeExcel.R"))
   if (is.null(subsetmatches)) {
     # geen subsets, 1 tabellenboek
