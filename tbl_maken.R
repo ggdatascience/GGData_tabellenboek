@@ -571,7 +571,7 @@ log.save = T
       }
       # merge zodat we voor elke respondent een sampling prob hebben
       fpc_per_respondent <- data.frame(
-        stratum = strata %>% as.factor
+        stratum = strata
       ) %>% left_join(
         fpc_data,
         join_by(stratum==stratum)
