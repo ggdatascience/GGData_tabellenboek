@@ -511,21 +511,27 @@ log.save = T
     }
   }
   
-  # superstrata maken en fpc correctiefactoren
+  ### superstrata maken en fpc correctiefactoren
   # superstrata
   # dit doen we door de bestaande strata te nummeren van 1-<aantal> en daar 1000 * dataset bij te doen
   # dus stratum 40 uit dataset 1 wordt 1040, stratum 25 uit dataset 2 wordt 2025, enz.
+  
+  data$superstrata = NA
+  for (d in 1:nrow(datasets)) {
+    strata = sort(unique(data$tbl_strata[data$tbl_dataset == d]))
+    for (i in 1:length(strata)) {
+      data$superstrata[data$tbl_dataset == d & data$tbl_strata == strata[i]] = d*1000 + i
+    }
+  }
+  
   # fpc correctie factoren
   # dit doen we uit te zoeken of we een fpc bestand hebben voor elke dataset,
   # dan dit te laden en te matchen met de oorspronkelijke stratumkolom (dus niet superstratum!)
-  data$superstrata = NA
   data$fpc = NA
   fpc_data = NULL
   for (d in 1:nrow(datasets)) {
-    dataset_columns = which(data$tbl_dataset == d) # welke kolommen in data gaan over dataset d, 'mijn kolommen'?
-    strata = data$tbl_strata[dataset_columns] # wat zijn de strata van mijn kolommen?
-    data$tbl_strata[dataset_columns] = paste0(strata, "_d", d) # pas strata namen aan zodat ze niet verward worden tussen datasets.
-    strata = data$tbl_strata[dataset_columns] # opnieuw binnenhalen voor later gebruik
+    dataset_indexes = which(data$tbl_dataset == d) # welke kolommen in data gaan over dataset d, 'mijn kolommen'?
+    strata = data$superstrata[dataset_indexes] # wat zijn de strata van mijn kolommen?
     unique_strata = sort(unique(strata)) # unique strata
     if("fpc" %in% colnames(datasets) && !is.na(datasets$fpc[d])){
       if(is.na(datasets$stratum[d])){stop("Bij FPC is het verplicht een stratum op te geven.")}
@@ -548,9 +554,9 @@ log.save = T
         fpc_data <- fpc_data %>% 
           left_join(
             data %>%
-              group_by(tbl_strata) %>%
+              group_by(superstrata) %>%
               summarise(populatiegrootte = sum(!!sym(gsub("GROOTGEWICHT_", "", datasets$fpc[d])), na.rm = TRUE)), 
-            join_by(stratum == tbl_strata)
+            join_by(stratum == superstrata)
           ) %>% 
           mutate(
             fpc = populatiegrootte
@@ -565,7 +571,7 @@ log.save = T
       }
       # merge zodat we voor elke respondent een sampling prob hebben
       fpc_per_respondent <- data.frame(
-        stratum = strata %>% as.factor
+        stratum = strata
       ) %>% left_join(
         fpc_data,
         join_by(stratum==stratum)
@@ -587,9 +593,6 @@ log.save = T
       data$fpc[dataset_columns] <- fpc_per_respondent$fpc
     } else {
       fpc_data <- NULL
-    }
-    for (i in 1:length(unique_strata)) {
-      data$superstrata[dataset_columns & data$tbl_strata == unique_strata[i]] = d*1000 + i
     }
   }
   
