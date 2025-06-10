@@ -537,6 +537,7 @@ log.save = T
       if(is.na(datasets$stratum[d])){stop("Bij FPC is het verplicht een stratum op te geven.")}
       fpc_data <- table(strata) %>%
         as.data.frame %>% 
+        mutate(strata = as.numeric(levels(strata))) %>% 
         rename(stratum = strata)
       if(file.exists(datasets$fpc[d])){
         # als het een pad is: zoek de fpc data op en berekenen sampling prob per stratum
@@ -590,7 +591,7 @@ log.save = T
       }
       
       # voeg de fpc factor toe aan de data
-      data$fpc[dataset_columns] <- fpc_per_respondent$fpc
+      data$fpc[dataset_indexes] <- fpc_per_respondent$fpc
     } else {
       fpc_data <- NULL
     }
