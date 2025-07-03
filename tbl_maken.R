@@ -969,17 +969,16 @@ log.save = T
       bh.table = matrix(nrow = length(pvals), ncol = 4)
       bh.table[,1] = pvals
       bh.table[,2] = (1:n_sign_tests)[1:length(pvals)]
-      bh.table[,3] = p.adjust(pvals, "BH", n_sign_tests) # met functie base r
-      bh.table[,4] = (bh.table[,2]/n_sign_tests)*algemeen$confidence_level_orig # berekening Aart
+      bh.table[,3] = (bh.table[,2]/n_sign_tests)*algemeen$confidence_level_orig # berekening Aart
       
       if (sum(bh.table[,1] < bh.table[,3]) < 1) {
         # geen enkele significante waarde
         #algemeen$confidence_level = 1e-20
         msg("Na Benjamini-Hochberg-correctie is er geen enkele p-waarde significant.", level=WARN)
       } else {
-        #algemeen$confidence_level = max(bh.table[bh.table[,1] < bh.table[,3],1])
-        #msg("De gewenste afkapwaarde voor significantie is met Benjamini-Hochberg-correctie op basis van %d toetsen aangepast van %e naar %e.",
-           #n_sign_tests, algemeen$confidence_level_orig, algemeen$confidence_level, level=MSG)
+        algemeen$confidence_level = max(bh.table[bh.table[,1] < bh.table[,3],1])
+        msg("De gewenste afkapwaarde voor significantie is met Benjamini-Hochberg-correctie op basis van %d toetsen aangepast van %e naar %e.",
+           n_sign_tests, algemeen$confidence_level_orig, algemeen$confidence_level, level=MSG)
       }
     } else if (algemeen$multiple_testing_correction == "bonferroni") {
       algemeen$confidence_level = algemeen$confidence_level / n_sign_tests
