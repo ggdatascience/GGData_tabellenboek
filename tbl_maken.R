@@ -537,6 +537,7 @@ log.save = T
       if(is.na(datasets$stratum[d])){stop("Bij FPC is het verplicht een stratum op te geven.")}
       fpc_data <- table(strata) %>%
         as.data.frame %>% 
+        mutate(strata = as.numeric(levels(strata))) %>% 
         rename(stratum = strata)
       if(file.exists(datasets$fpc[d])){
         # als het een pad is: zoek de fpc data op en berekenen sampling prob per stratum
@@ -590,7 +591,7 @@ log.save = T
       }
       
       # voeg de fpc factor toe aan de data
-      data$fpc[dataset_columns] <- fpc_per_respondent$fpc
+      data$fpc[dataset_indexes] <- fpc_per_respondent$fpc
     } else {
       fpc_data <- NULL
     }
@@ -965,19 +966,19 @@ log.save = T
       pvals = sort(sign_tests$sign)
       pvals = pvals[!is.na(pvals)]
       
-      bh.table = matrix(nrow = n_sign_tests, ncol = 3)
+      bh.table = matrix(nrow = length(pvals), ncol = 3)
       bh.table[,1] = pvals
-      bh.table[,2] = 1:n_sign_tests
-      bh.table[,3] = (bh.table[,2]/n_sign_tests)*algemeen$confidence_level_orig
+      bh.table[,2] = (1:n_sign_tests)[1:length(pvals)]
+      bh.table[,3] = (bh.table[,2]/n_sign_tests)*algemeen$confidence_level_orig # berekening Aart
       
       if (sum(bh.table[,1] < bh.table[,3]) < 1) {
         # geen enkele significante waarde
         algemeen$confidence_level = 1e-20
-        msg("Na Benjamini-Hochberg-correctie is er geen enkele p-waarde significant. De afkapwaarde voor significantie is daarom ingesteld op 1e-20.", level=WARN)
+        msg("Na Benjamini-Hochberg-correctie is er geen enkele p-waarde significant.", level=WARN)
       } else {
         algemeen$confidence_level = max(bh.table[bh.table[,1] < bh.table[,3],1])
         msg("De gewenste afkapwaarde voor significantie is met Benjamini-Hochberg-correctie op basis van %d toetsen aangepast van %e naar %e.",
-            n_sign_tests, algemeen$confidence_level_orig, algemeen$confidence_level, level=MSG)
+           n_sign_tests, algemeen$confidence_level_orig, algemeen$confidence_level, level=MSG)
       }
     } else if (algemeen$multiple_testing_correction == "bonferroni") {
       algemeen$confidence_level = algemeen$confidence_level / n_sign_tests
