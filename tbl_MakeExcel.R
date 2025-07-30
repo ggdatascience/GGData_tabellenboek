@@ -429,6 +429,8 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
       if (!indeling_rijen$inhoud[i] %in% niet_dichotoom &&
           (indeling_rijen$inhoud[i] %in% dichotoom ||
            isTRUE(all.equal(levels.var, c(0, 1))) ||
+           isTRUE(all.equal(levels.var, c(0))) ||
+           isTRUE(all.equal(levels.var, c(1))) ||
            any(unlist(lapply(dichotoom.vals, function (x) { return(identical(x, levels.var)) }))))) {
         output = output %>% as.data.frame() %>% rownames_to_column("val") %>% filter(val == 1) %>%
           mutate(label=var_labels$label[var_labels$var == indeling_rijen$inhoud[i] & var_labels$val == "var"],
