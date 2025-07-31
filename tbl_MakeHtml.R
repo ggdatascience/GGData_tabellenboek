@@ -611,6 +611,8 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
       if (!indeling_rijen$inhoud[i] %in% niet_dichotoom &&
           (indeling_rijen$inhoud[i] %in% dichotoom ||
            isTRUE(all.equal(levels.var, c(0, 1))) ||
+           isTRUE(all.equal(levels.var, c(0))) ||
+           isTRUE(all.equal(levels.var, c(1))) ||
            any(unlist(lapply(dichotoom.vals, function (x) { return(identical(x, levels.var)) }))))) {
         output = output %>%
           filter(val == 1) %>%
