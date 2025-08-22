@@ -176,14 +176,19 @@ log.save = T
     onderdelen$kolomnaam = NA
   }
   
-  # idem voor id bij logos
-  if (!"id" %in% colnames(logos)) {
+  # idem voor id bij logos - nrow() is nodig omdat logos$id = NA bij 0 rijen een foutmelding geeft
+  if (!"id" %in% colnames(logos) && nrow(logos) > 0) {
     logos$id = NA
   }
   
   # en verberg_crossings bij indeling_rijen
   if (!"verberg_crossings" %in% colnames(indeling_rijen)) {
     indeling_rijen$verberg_crossings = NA
+  }
+  
+  # naam_tabellenboek is later toegevoegd bij opmaak, en kan als enige voor problemen zorgen, dus...
+  if (sum(opmaak$type == "naam_tabellenboek") == 0) {
+    opmaak = rbind(opmaak, data.frame(type="naam_tabellenboek", waarde="Overzicht"))
   }
   
   # variabelelijst afleiden uit de indeling van het tabellenboek;
@@ -986,6 +991,15 @@ log.save = T
           n_sign_tests, algemeen$confidence_level_orig, algemeen$confidence_level, level=MSG)
     } else {
       msg("Er is geen geldige waarde opgegeven voor multiple_testing_correction. Geldigde waardes zijn 'BH' voor Benjamini-Hochberg of 'bonferroni' voor Bonferroni.", level=ERR)
+    }
+  }
+  
+  # controleren of de gewenste logo's bestaan - anders kunnen de HTML- en Excel-functies ze niet openen
+  if (nrow(logos) > 0) {
+    for (i in 1:nrow(logos)) {
+      if (!file.exists(logos$bestand[i])) {
+        msg("Een opgegeven logo bestaat niet: rij %d, bestandsnaam %s - zorg dat dit pad klopt, of verwijder de rij uit de configuratie.", i, logos$bestand[i], level=ERR)
+      }
     }
   }
   
