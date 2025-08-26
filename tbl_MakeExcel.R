@@ -408,6 +408,9 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
       # zijn er aparte wensen qua weergave van antwoordmogelijkheden?
       if (!is.na(indeling_rijen$waardes[i])) {
         desired_answers = str_split(indeling_rijen$waardes[i], fixed("|")) %>% unlist() %>% str_trim()
+        if (!all(desired_answers %in% rownames(output)))
+          msg("Bij variabele %s is %s opgegeven als gewenste uitvoer, maar deze komen niet allemaal voor in de data. Ter referentie, in de data bestaat %s.", 
+              indeling_rijen$inhoud[i], str_c(desired_answers, collapse=", "), str_c(rownames(output), collapse=", "), level=ERR)
         # wanneer er slechts 1 rij geselecteerd wordt verandert de matrix in een lijst, waardoor alles explodeert
         # oplossing: maak er een data.frame van
         output = as.data.frame(output)
