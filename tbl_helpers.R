@@ -30,9 +30,16 @@ msg = function (msg, ..., level = DEBUG) {
   # schrijf naar logbestand
   if (log.save) {
     if (is.character(msg)) {
-      cat(sprintf(paste0("[%s - %s] ", msg, "\n"), Sys.time(), deparse(substitute(level)), ...), file = "log.txt", append=T)
+      tryCatch({
+        cat(sprintf(paste0("[%s - %s] ", msg, "\n"), Sys.time(), deparse(substitute(level)), ...), file = "log.txt", append=T)
+      },
+      error=function(e) { warning(paste0("Fout bij het schrijven naar de log: ", e)) })
+      
     } else {
-      cat(sprintf(paste0("[%s - %s] ", msg, "\n"), Sys.time(), deparse(substitute(level))), file = "log.txt", append=T)
+      tryCatch({
+        cat(sprintf(paste0("[%s - %s] ", msg, "\n"), Sys.time(), deparse(substitute(level))), file = "log.txt", append=T)
+      },
+      error=function(e) { warning(paste0("Fout bij het schrijven naar de log: ", e)) })
     }
   }
   

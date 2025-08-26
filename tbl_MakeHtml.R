@@ -595,7 +595,15 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
       # zijn er aparte wensen qua weergave van antwoordmogelijkheden?
       if (!is.na(indeling_rijen$waardes[i])) {
         desired_answers = str_split(indeling_rijen$waardes[i], fixed("|")) %>% unlist() %>% str_trim()
+        if (!all(desired_answers %in% output$val))
+          msg("Bij variabele %s is %s opgegeven als gewenste uitvoer, maar deze komen niet allemaal voor in de data. Ter referentie, in de data bestaat %s.", 
+              indeling_rijen$inhoud[i], str_c(desired_answers, collapse=", "), str_c(output$val, collapse=", "), level=ERR)
         desired_rownums = sapply(desired_answers, function (a) { return(which(output$val == a)) })
+        
+        #if ()
+        
+        print(desired_rownums)
+        browser()
         output = output[desired_rownums,]
       }
       
