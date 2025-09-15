@@ -600,10 +600,6 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
               indeling_rijen$inhoud[i], str_c(desired_answers, collapse=", "), str_c(output$val, collapse=", "), level=ERR)
         desired_rownums = sapply(desired_answers, function (a) { return(which(output$val == a)) })
         
-        #if ()
-        
-        print(desired_rownums)
-        browser()
         output = output[desired_rownums,]
       }
       

@@ -152,6 +152,41 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
                                        e, level=WARN))
               }
             }
+          } else if (!is.na(colgroups$test.col[i])) {
+            # tweede kolom includeren om te testen; dit leidt tot een vector van selecties
+            selection = paste0(desired.cols, " | dummy._col", colgroups$test.col[i])
+            # subset nodig voor testkolom?
+            if (!is.na(col.design$subset[colgroups$test.col[i]])) {
+              if (col.design$subset[colgroups$test.col[i]] == leadingsubset) {
+                selection = paste0(selection, ".s.", subsetvals[s])
+              } else {
+                selection = paste0(selection, ".s.", subsetmatches[subsetmatches[,1] == subsetvals[s], col.design$subset[colgroups$test.col[i]]])
+              }
+            }
+            for (j in 1:length(selection)) {
+              select = selection[j]
+              design.subset = subset(design, eval(parse(text=select)))
+              source.col = str_split(select, fixed(" | "))[[1]][1]
+              
+              answers = rownames(weighted)
+              for (answer in answers) {
+                tablecounts = table(design.subset$variables[[paste0("dummy.", var, ".", answer)]], design.subset$variables[[source.col]])
+                if (any(colSums(tablecounts) == 0)) {
+                  # er is geen data in één van beide kolommen; p-waarde berekenen is zinloos
+                  msg("Bij variabele %s met antwoord %s (%s) kon geen p-waarde worden berekend in vergelijking met kolom %d; één van beide kolommen is leeg.",
+                      var, answer, var_labels$label[var_labels$var == var & var_labels$val == answer], colgroups$test.col[i], level=WARN)
+                  next
+                }
+                tryCatch({
+                  test = svychisq(formula=as.formula(paste0("~dummy.", var, ".", answer, "+", source.col)),
+                                  design=design.subset)
+                  pvals[answer, j] = test$p.value
+                },
+                error=function (e) msg("Bij variabele %s met antwoord %s (%s) kon geen p-waarde worden berekend. Foutmelding: %s",
+                                       var, answer, var_labels$label[var_labels$var == var & var_labels$val == answer],
+                                       e, level=WARN))
+              }
+            }
           }
           
           
@@ -283,6 +318,40 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
             error=function (e) msg("Bij variabele %s met antwoord %s (%s) kon geen p-waarde worden berekend voor crossing %s. Foutmelding: %s",
                                    var, answer, var_labels$label[var_labels$var == var & var_labels$val == answer], colgroups$crossing[i],
                                    e, level=WARN))
+          }
+        }
+      } else if (!is.na(colgroups$test.col[i])) {
+        # let op: testen vanuit een kolom zonder subset naar een kolom MET subset gaat niet
+        if (!is.na(col.design$subset[colgroups$test.col[i]])) {
+          msg("Let op! In kolom %d (zonder subset) wordt vergeleken met kolom %d (met subset). Dit is niet mogelijk met de opbouw van de code. Als deze verschillen inzichtelijk gemaakt moeten worden moet de berekening andersom worden gezet: kolom MET subset vs. kolom ZONDER subset.",
+              col, colgroups$test.col[i], level=WARN)
+        } else {
+          # tweede kolom includeren om te testen; dit leidt tot een vector van selecties
+          selection = paste0("dummy._col", cols, " | dummy._col", colgroups$test.col[i])
+          
+          for (j in 1:length(selection)) {
+            select = selection[j]
+            design.subset = subset(design, eval(parse(text=select)))
+            source.col = str_split(select, fixed(" | "))[[1]][1]
+            
+            answers = rownames(weighted)
+            for (answer in answers) {
+              tablecounts = table(design.subset$variables[[paste0("dummy.", var, ".", answer)]], design.subset$variables[[source.col]])
+              if (any(colSums(tablecounts) == 0)) {
+                # er is geen data in één van beide kolommen; p-waarde berekenen is zinloos
+                msg("Bij variabele %s met antwoord %s (%s) kon geen p-waarde worden berekend in vergelijking met kolom %d; één van beide kolommen is leeg.",
+                    var, answer, var_labels$label[var_labels$var == var & var_labels$val == answer], colgroups$test.col[i], level=WARN)
+                next
+              }
+              tryCatch({
+                test = svychisq(formula=as.formula(paste0("~dummy.", var, ".", answer, "+", source.col)),
+                                design=design.subset)
+                pvals[answer, j] = test$p.value
+              },
+              error=function (e) msg("Bij variabele %s met antwoord %s (%s) kon geen p-waarde worden berekend. Foutmelding: %s",
+                                     var, answer, var_labels$label[var_labels$var == var & var_labels$val == answer],
+                                     e, level=WARN))
+            }
           }
         }
       }

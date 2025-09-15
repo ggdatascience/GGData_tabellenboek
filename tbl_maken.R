@@ -660,6 +660,10 @@ log.save = T
         # uitzoeken welke kolom tegenhanger moet zijn van de chi square
         if (onderdelen$sign_crossing[i] == "intern") {
           test.col = 0 # 0 = toetsen met andere waarden van de crossing, als waarde toetsen in sheet crossings != FALSE
+        } else if (onderdelen$sign_crossing[i] == "totaal") {
+          test.col = -1 # -1 wordt later vervangen door de huidige totaalkolom
+        } else if (str_detect(onderdelen$sign_crossing[i], "^\\d+$")) {
+          test.col = as.numeric(onderdelen$sign_crossing[i])
         } else {
           # geen toets
           test.col = NA
@@ -704,6 +708,8 @@ log.save = T
     kolom_opbouw = bind_rows(kolom_opbouw, data.frame(col.index=nrow(kolom_opbouw)+1, dataset=d, subset=onderdelen$subset[i], year=onderdelen$jaar[i],
                                                       crossing=NA, crossing.val=NA, crossing.lab=NA, test.col=test.col, test.display=!onderdelen$sign_doelkolom[i],
                                                       name=onderdelen$kolomnaam[i]))
+    
+    kolom_opbouw$test.col[kolom_opbouw$test.col == -1] = nrow(kolom_opbouw)
   }
   
   # moeten er nog testkolommen toegevoegd worden uit de cache?
