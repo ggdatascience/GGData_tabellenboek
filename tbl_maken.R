@@ -14,7 +14,7 @@ if(!(exists("skip_config_popup") && skip_config_popup)){
 label_problemen <- NULL
 # benodigde packages installeren als deze afwezig zijn
 pkg_nodig = c("tidyverse", "survey", "haven", "this.path", "textutils",
-              "labelled", "openxlsx", "doParallel", "foreach", "knitr")
+              "labelled", "openxlsx", "knitr")
 
 for (pkg in pkg_nodig) {
   if (system.file(package = pkg) == "") {
@@ -29,8 +29,6 @@ library(this.path)
 library(textutils)
 library(labelled)
 library(openxlsx)
-suppressPackageStartupMessages(library(doParallel))
-library(foreach)
 library(knitr)
 
 # instellen werkmap voor het laden van de andere bestanden

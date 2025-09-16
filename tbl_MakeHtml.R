@@ -404,7 +404,7 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
     # als er iets in de tijdelijke opslag zit en de huidige regel != "var" of "nvar", printen
     if (!is.null(table.cache) && !indeling_rijen$type[i] %in% c("var", "nvar")) {
       table.output = c(table.output, paste0("<table>\r\n",
-                                            "<caption>", question.cache, "</caption>\r\n",
+                                            "<caption>", HTMLencode(question.cache), "</caption>\r\n",
                                             header.output, "\r\n",
                                             ifelse(!is.null(n.cache), BuildHtmlTableRows(n.cache, col.design, T), ""),
                                             perc.row.output, "\r\n",
@@ -466,7 +466,13 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
       # Binnen Excel was dit geen probleem; gewoon stiekem een rij toevoegen zonder kop en ergens verzinnen dat er een kop boven moest...
       # Bij HTML-bestanden werkt dit helaas niet zo, daar moeten we de tabel als geheel opzetten.
       # Dit betekent dat we een tijdelijke tabel met voorgaande resultaten moeten opbouwen, welke pas in het document geplakt wordt als
-      # er géén dichotome variabele meer volgt. (Let op: er kan een witregel tussen zitten! )
+      # er géén dichotome variabele meer volgt.
+      # Andersom komt ook voor; dat een niet-dichotome variabele wordt gevolgd door een dichotome variabele, maar dat deze als geheel in één
+      # tabel moeten. Bijvoorbeeld: ervaren gezondheid - zeer goed, goed, meh, slecht, enz., gevolgd door 'ervaart gezondheid als (zeer) goed'.
+      # Deze willen we eigenlijk onder elkaar hebben. De logica is daardoor als volgt:
+      # Resultaten van variabelen worden opgespaard, ongeacht het type van de huidige variabele, en vervolgens als één tabel geëxporteerd wanneer:
+      # - Het volgende element geen variabele is (bijv. een kop, tekst, e.d.)
+      # - Het volgende element een niet-dichotome variabele is (want die heeft een eigen kop nodig)
       
       # benodigde resultaten ophalen, zodat we niet steeds belachelijke selectors nodig hebben
       data.var = data.frame()
@@ -512,7 +518,7 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
         as.data.frame() %>%
         mutate(label="Aantal respondenten", sign=NA, .before=1)
       
-      # voor het schrijven naar Excel is een matrix met getallen makkelijker
+      # voor het wegschrijven is een matrix met getallen makkelijker
       # het kan voorkomen dat niet alle antwoordmogelijkheden in elke subset aanwezig zijn
       # daarom nemen we hier de bekende labels, i.p.v. de voorkomende waardes
       output = matrix(nrow=length(var_labels$val[var_labels$var == indeling_rijen$inhoud[i] & var_labels$val != "var"]), ncol=nrow(col.design))
@@ -647,7 +653,7 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
         # moet er nog een vorige tabel geprint worden?
         if (!is.null(table.cache)) {
           table.output = c(table.output, paste0("<table>\r\n",
-                                                "<caption>", question.cache, "</caption>\r\n",
+                                                "<caption>", HTMLencode(question.cache), "</caption>\r\n",
                                                 header.output, "\r\n",
                                                 ifelse(!is.null(n.cache), BuildHtmlTableRows(n.cache, col.design, T), ""),
                                                 perc.row.output, "\r\n",
@@ -660,18 +666,14 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
           n.cache = NULL
         }
         
-        # tabel invoegen
-        table.output = c(table.output, paste0("<h4 class=\"vraag\">", HTMLencode(var_labels$label[var_labels$var == indeling_rijen$inhoud[i] & var_labels$val == "var"]), "</h4>",
-                                              "<table>\r\n",
-                                              # titel van de vraag toevoegen
-                                              "<caption>", var_labels$label[var_labels$var == indeling_rijen$inhoud[i] & var_labels$val == "var"], "</caption>\r\n",
-                                              header.output, "\r\n",
-                                              ifelse(indeling_rijen$type[i] == "nvar", BuildHtmlTableRows(n_var, col.design, T), ""),
-                                              perc.row.output, "\r\n",
-                                              "<tbody>\r\n",
-                                              BuildHtmlTableRows(output, col.design),
-                                              "</tbody>\r\n",
-                                              "</table>\r\n<br />\r\n"))
+        # tabel in de cache zetten, mochten er nog niet-dichotome variabelen zijn
+        question.cache = var_labels$label[var_labels$var == indeling_rijen$inhoud[i] & var_labels$val == "var"]
+        table.cache = output
+        if (indeling_rijen$type[i] == "nvar")
+          n.cache = n_var
+        
+        # de vraag moet wel vast geprint worden; de cache wordt zonder vraag geprint, aangezien dit vaak geen aparte vraag nodig heeft
+        table.output = c(table.output, paste0("<h4 class=\"vraag\">", HTMLencode(var_labels$label[var_labels$var == indeling_rijen$inhoud[i] & var_labels$val == "var"]), "</h4>"))
       }
       
       # TODO: herschrijven
@@ -685,7 +687,7 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
   # als er nog iets in de tijdelijke opslag zit, printen
   if (!is.null(table.cache)) {
     table.output = c(table.output, paste0("<table>\r\n",
-                                          "<caption>", question.cache, "</caption>\r\n",
+                                          "<caption>", HTMLencode(question.cache), "</caption>\r\n",
                                           header.output, "\r\n",
                                           ifelse(!is.null(n.cache), BuildHtmlTableRows(n.cache, col.design), ""),
                                           perc.row.output,
@@ -696,74 +698,6 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
     question.cache = NA
     table.cache = NULL
   }
-  
-  # laatste regel aanhouden als einde, zodat de kleuren niet doorlopen
-  # c = c - 1
-  # 
-  # # algemene opmaak
-  # setColWidths(wb, subset.name, cols=1, hidden=T) # 1e kolom verbergen, die is alleen voor eigen naslag
-  # setColWidths(wb, subset.name, cols=2, width=design("kolombreedte_antwoorden")) # 2de kolom breder voor de tekstlabels
-  # setColWidths(wb, subset.name, cols=3:n.col.total, width=design("kolombreedte")) # 3 tot nde kolom vaste breedte
-  # setRowHeights(wb, subset.name, rows=table.start:c, heights=design("rij_hoogte")) # normale rijhoogte, ná de intro
-  # 
-  # if (length(label.oversized.rows) > 0) {
-  #   setRowHeights(wb, subset.name, rows=label.oversized.rows, heights=design("rij_hoogte")*2)
-  # }
-  # 
-  # addStyle(wb, subset.name, createStyle(wrapText=T), rows=table.start:c, cols=1:n.col.total, gridExpand=T, stack=T)
-  # addStyle(wb, subset.name, createStyle(fgFill="#ffffff"), rows=which(!1:c %in% title.rows), cols=1:n.col.total, gridExpand=T, stack=T)
-  # 
-  # # afwisselende kleuren?
-  # if (design("rijen_afwisselend_kleuren")) {
-  #   # data.rows bevat de rijen met data
-  #   # als het verschil tussen twee waardes meer dan 1 is gaat het om een nieuwe categorie, dus daar steeds opnieuw beginnen met tellen
-  #   data.rows.diff = data.rows - lag(data.rows)
-  #   data.rows.blocks = which(data.rows.diff > 1)
-  #   
-  #   data.rows.interval = c()
-  #   for (i in 1:length(data.rows.blocks)) {
-  #     end = ifelse(i < length(data.rows.blocks), data.rows[data.rows.blocks[i + 1]-1], data.rows[length(data.rows)])
-  #     if (data.rows[data.rows.blocks[i]] > end) next
-  #     data.rows.interval = c(data.rows.interval, seq(from=data.rows[data.rows.blocks[i]], to=end, by=2))
-  #   }
-  #   
-  #   addStyle(wb, subset.name, style.gray.bg, rows=data.rows.interval, cols=1:n.col.total, gridExpand=T, stack=T)
-  # }
-  # if (design("kolommen_afwisselend_kleuren")) {
-  #   addStyle(wb, subset.name, style.gray.bg, rows=1:c, cols=seq(from=3, to=n.col.total, by=2), gridExpand=T, stack=T)
-  # }
-  # if (design("kolommen_crossings_kleuren")) {
-  #   col.design = col.design %>% group_by(dataset, subset, year, crossing)
-  #   cols = group_rows(col.design)[order(sapply(group_rows(col.design),'[[',1))]
-  #   gray = T
-  #   for (i in cols) {
-  #     if (gray) {
-  #       addStyle(wb, subset.name, style.gray.bg, rows=c(data.rows, perc.rows, header.col.rows + ifelse(design("header_stijl") == "enkel", 0, 1)),
-  #                cols=2+i, gridExpand=T, stack=T)
-  #     }
-  #     gray = !gray
-  #   }
-  # }
-  # 
-  # # TODO: borders om de tabellen?
-  # 
-  # # plaatjes toevoegen?
-  # if (nrow(logos) > 0) {
-  #   for (i in 1:nrow(logos)) {
-  #     rij = logos$rij[i]
-  #     kolom = logos$kolom[i]
-  #     # bij negatieve waarden doen we aantal - waarde
-  #     if (rij < 0) {
-  #       rij = c - abs(rij)
-  #     }
-  #     if (kolom < 0) {
-  #       kolom = n.col.total - abs(kolom) + 1
-  #     }
-  #     
-  #     insertImage(wb, subset.name, file=logos$bestand[i], width=logos$breedte[i], height=logos$hoogte[i], units="px",
-  #                 startRow=rij, startCol=kolom)
-  #   }
-  # }
 
   # tabellen toevoegen en witregel aan het einde
   table.output = c(table.output, "<br>\r\n")
