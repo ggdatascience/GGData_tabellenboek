@@ -107,6 +107,9 @@ log.save = T
   }
   rm(tmp)
   
+  # om te voorkomen dat spaties na variabelenamen zorgen voor problemen...
+  indeling_rijen$inhoud = trim(indeling_rijen$inhoud)
+  
   msg("Start verwerking configuratiebestand %s...", config.file, level=MSG)
   
   # controleren of nieuw toegevoegde opties ook zijn ingevuld
