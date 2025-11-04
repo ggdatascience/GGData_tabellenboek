@@ -761,6 +761,16 @@ log.save = T
     n_resp$subset = NA
   }
   
+  # zijn er kolommen genoemd die niet bestaan?
+  # dit gebeurt bijvoorbeeld als een configuratie later wordt aangepast en het aantal kolommen wijzigt
+  if (any(kolom_opbouw$test.col > max(kolom_opbouw$col.index), na.rm=T)) {
+    print(kolom_opbouw[, c("col.index", "dataset", "subset", "year", "crossing", "crossing.lab", "test.col")])
+    msg("Er wordt getracht te vergelijken met een kolom die niet bestaat. In kolom(men) %s wordt verwezen naar kolom(men) %s, maar er zijn slechts %d kolommen. Zie ook bovenstaand overzicht.", 
+        str_c(which(kolom_opbouw$test.col > max(kolom_opbouw$col.index)), collapse=", "),
+        str_c(kolom_opbouw$test.col[which(kolom_opbouw$test.col > max(kolom_opbouw$col.index))]),
+        max(kolom_opbouw$col.index), level=ERR)
+  }
+  
   ##### begin berekeningen
   
   # mochten er subsets zijn, dan is het efficiënter om 1x te berekenen welke matches hierin bestaan
