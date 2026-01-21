@@ -984,31 +984,37 @@ log.save = T
           nrow(sign_tests), n_sign_tests, level=WARN)
     }
     
-    if (algemeen$multiple_testing_correction == "BH") {
-      pvals = sort(sign_tests$sign)
-      pvals = pvals[!is.na(pvals)]
-      
-      bh.table = matrix(nrow = length(pvals), ncol = 3)
-      bh.table[,1] = pvals
-      bh.table[,2] = (1:n_sign_tests)[1:length(pvals)]
-      bh.table[,3] = (bh.table[,2]/n_sign_tests)*algemeen$confidence_level_orig # berekening Aart
-      
-      if (sum(bh.table[,1] < bh.table[,3]) < 1) {
-        # geen enkele significante waarde
-        algemeen$confidence_level = 1e-20
-        msg("Na Benjamini-Hochberg-correctie is er geen enkele p-waarde significant.", level=WARN)
+    if(!is.na(algemeen$multiple_testing_correction)){
+      if (grepl("bh|benjamini|hochberg", algemeen$multiple_testing_correction, T)) {
+        if(n_sign_tests > nrow(sign_tests)){
+          msg("Let op! Het aantal in de configuratie opgegeven toetsen is hoger dan het aantal in dit tabellenboek. Met Benjamini-Hochberg-correctie kan dit vertekende resultaten opleveren.", level=WARN)
+        }
+        pvals = sort(sign_tests$sign)
+        pvals = pvals[!is.na(pvals)]
+        
+        bh.table = matrix(nrow = length(pvals), ncol = 3)
+        bh.table[,1] = pvals
+        bh.table[,2] = (1:n_sign_tests)[1:length(pvals)]
+        bh.table[,3] = (bh.table[,2]/n_sign_tests)*algemeen$confidence_level_orig # berekening Aart
+        
+        if (sum(bh.table[,1] < bh.table[,3]) < 1) {
+          # geen enkele significante waarde
+          algemeen$confidence_level = 1e-20
+          msg("Na Benjamini-Hochberg-correctie is er geen enkele p-waarde significant.", level=WARN)
+        } else {
+          algemeen$confidence_level = max(bh.table[bh.table[,1] < bh.table[,3],1])
+          msg("De gewenste afkapwaarde voor significantie is met Benjamini-Hochberg-correctie op basis van %d toetsen aangepast van %e naar %e.",
+              n_sign_tests, algemeen$confidence_level_orig, algemeen$confidence_level, level=MSG)
+        }
+      } else if (grepl("bf|bonferonni|bonferroni|bonferronni", algemeen$multiple_testing_correction, T)) {
+        algemeen$confidence_level = algemeen$confidence_level / n_sign_tests
+        msg("De gewenste afkapwaarde voor significantie is met Bonferroni-correctie op basis van %d toetsen aangepast van %e naar %e.",
+            n_sign_tests, algemeen$confidence_level_orig, algemeen$confidence_level, level=MSG)
       } else {
-        algemeen$confidence_level = max(bh.table[bh.table[,1] < bh.table[,3],1])
-        msg("De gewenste afkapwaarde voor significantie is met Benjamini-Hochberg-correctie op basis van %d toetsen aangepast van %e naar %e.",
-           n_sign_tests, algemeen$confidence_level_orig, algemeen$confidence_level, level=MSG)
+        msg("Er is geen geldige waarde opgegeven voor multiple_testing_correction. Geldigde waardes zijn 'BH' voor Benjamini-Hochberg of 'bonferroni' voor Bonferroni.", level=ERR)
       }
-    } else if (algemeen$multiple_testing_correction == "bonferroni") {
-      algemeen$confidence_level = algemeen$confidence_level / n_sign_tests
-      msg("De gewenste afkapwaarde voor significantie is met Bonferroni-correctie op basis van %d toetsen aangepast van %e naar %e.",
-          n_sign_tests, algemeen$confidence_level_orig, algemeen$confidence_level, level=MSG)
-    } else {
-      msg("Er is geen geldige waarde opgegeven voor multiple_testing_correction. Geldigde waardes zijn 'BH' voor Benjamini-Hochberg of 'bonferroni' voor Bonferroni.", level=ERR)
     }
+
   }
   
   # controleren of de gewenste logo's bestaan - anders kunnen de HTML- en Excel-functies ze niet openen
