@@ -581,11 +581,14 @@ log.save = T
         stratum = strata
       ) %>% left_join(
         fpc_data,
-        join_by(stratum==stratum)
+        join_by(stratum == stratum)
       )
       is_small_strata <- fpc_per_respondent$Freq >= fpc_per_respondent$populatiegrootte
-      if(any(is_small_strata)){
-        msg("Er bevinden zich kleine strata in de data waarvoor de geschatte populatiegrootte kleiner is dan aantal respondenten. Er wordt nu aangenomen dat de populatiegrootte gelijk is aan aantal respondenten. Het gaat om:", level=MSG)
+      if(any(is.na(fpc_per_respondent$stratum))){
+        msg("Er bevinden zich %s respondenten met een missend strata in de dataset. Deze worden niet meegenomen in de weging.", sum(is.na(fpc_per_respondent$stratum)), level=MSG)
+      }
+      if(any(is_small_strata, na.rm = T)){
+        msg("Er bevinden zich kleine strata in de data waarvoor de geschatte populatiegrootte kleiner is dan aantal respondenten. Er wordt nu aangenomen dat de populatiegrootte hier gelijk is aan aantal respondenten. Het gaat om:", level=MSG)
         fpc_per_respondent <- fpc_per_respondent %>% 
           mutate(
           fpc = case_when(
