@@ -16,7 +16,7 @@ source("tbl_helpers.R")
 search = read.xlsx(choose.files(caption="Selecteer configuratiebestand...",
                                 filters=c("Excel-bestand (*.xlsx)","*.xlsx"),
                                 multi=F))
-if (any(!c("vraag", "oud", "nieuw") %in% search)) {
+if (any(!c("vraag", "oud", "nieuw") %in% colnames(search))) {
   stop("De benodigde kolommen ontbreken; vraag, oud of nieuw.")
 }
 #search = data.frame(vraag="Ervaren gezondheid in 3", oud="Vrouw", nieuw="Test")
