@@ -145,6 +145,12 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
               for (answer in answers) {
                 tryCatch({
                   test = svychisq(formula=as.formula(paste0("~dummy.", var, ".", answer, "+", colgroups$crossing[i])), design=design.subset)
+                  if(is.nan(test$p.value) & algemeen$benader_chisq){
+                    test = svychisq(formula=as.formula(paste0("~dummy.", var, ".", answer, "+", colgroups$crossing[i])), design=design.subset, statistic="Chisq")
+                    msg("Bij variabele %s met antwoord %s (%s) kon de p-waarde niet met worden berekend met F (Rao–Scott second order).  Nu schatting op basis van Chisq (Rao–Scott first order).",
+                        var, answer, var_labels$label[var_labels$var == var & var_labels$val == answer], level=WARN)
+                    
+                  }
                   pvals[answer,] = rep(test$p.value, ncol(pvals))
                 },
                 error=function (e) msg("Bij variabele %s met antwoord %s (%s) kon geen p-waarde worden berekend voor crossing %s in subset %s. Foutmelding: %s",
@@ -180,6 +186,12 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
                 tryCatch({
                   test = svychisq(formula=as.formula(paste0("~dummy.", var, ".", answer, "+", source.col)),
                                   design=design.subset)
+                  if(is.nan(test$p.value) & algemeen$benader_chisq){
+                    test = svychisq(formula=as.formula(paste0("~dummy.", var, ".", answer, "+", source.col)),
+                                    design=design.subset, statistic = "Chisq")
+                    msg("Bij variabele %s met antwoord %s (%s) kon de p-waarde niet met worden berekend met F (Rao–Scott second order).  Nu schatting op basis van Chisq (Rao–Scott first order).",
+                        var, answer, var_labels$label[var_labels$var == var & var_labels$val == answer], level=WARN)
+                  }
                   pvals[answer, j] = test$p.value
                 },
                 error=function (e) msg("Bij variabele %s met antwoord %s (%s) kon geen p-waarde worden berekend. Foutmelding: %s",
@@ -260,6 +272,12 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
               tryCatch({
                 test = svychisq(formula=as.formula(paste0("~dummy.", var, ".", answer, "+dummy._col", col, ".s.", subsetval)),
                                 design=design.subset)
+                if(is.nan(test$p.value) & algemeen$benader_chisq){
+                  test = svychisq(formula=as.formula(paste0("~dummy.", var, ".", answer, "+dummy._col", col, ".s.", subsetval)),
+                                  design=design.subset, statistic = "Chisq")
+                  msg("Bij variabele %s met antwoord %s (%s) kon de p-waarde niet met worden berekend met F (Rao–Scott second order).  Nu schatting op basis van Chisq (Rao–Scott first order).",
+                      var, answer, var_labels$label[var_labels$var == var & var_labels$val == answer], level=WARN)
+                }
                 pvals[answer] = test$p.value
               },
               error=function (e) msg("Bij variabele %s met antwoord %s (%s) kon geen p-waarde worden berekend. Foutmelding: %s",
@@ -313,6 +331,11 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
           for (answer in answers) {
             tryCatch({
               test = svychisq(formula=as.formula(paste0("~dummy.", var, ".", answer, "+", colgroups$crossing[i])), design=design.subset)
+              if(is.nan(test$p.value) & algemeen$benader_chisq){
+                test = svychisq(formula=as.formula(paste0("~dummy.", var, ".", answer, "+", colgroups$crossing[i])), design=design.subset, statistic="Chisq")
+                msg("Bij variabele %s met antwoord %s (%s) kon de p-waarde niet met worden berekend met F (Rao–Scott second order).  Nu schatting op basis van Chisq (Rao–Scott first order).",
+                    var, answer, var_labels$label[var_labels$var == var & var_labels$val == answer], level=WARN)
+              }
               pvals[answer,] = rep(test$p.value, ncol(pvals))
             },
             error=function (e) msg("Bij variabele %s met antwoord %s (%s) kon geen p-waarde worden berekend voor crossing %s. Foutmelding: %s",
@@ -346,6 +369,13 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
               tryCatch({
                 test = svychisq(formula=as.formula(paste0("~dummy.", var, ".", answer, "+", source.col)),
                                 design=design.subset)
+                if(is.nan(test$p.value) & algemeen$benader_chisq){
+                  test = svychisq(formula=as.formula(paste0("~dummy.", var, ".", answer, "+", source.col)),
+                                  design=design.subset, statistic="Chisq")
+                  msg("Bij variabele %s met antwoord %s (%s) kon de p-waarde niet met worden berekend met F (Rao–Scott second order).  Nu schatting op basis van Chisq (Rao–Scott first order).",
+                      var, answer, var_labels$label[var_labels$var == var & var_labels$val == answer], level=WARN)
+                  
+                }
                 pvals[answer, j] = test$p.value
               },
               error=function (e) msg("Bij variabele %s met antwoord %s (%s) kon geen p-waarde worden berekend. Foutmelding: %s",
@@ -417,6 +447,12 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
             tryCatch({
               test = svychisq(formula=as.formula(paste0("~dummy.", var, ".", answer, "+dummy._col", col)),
                               design=design.subset)
+              if(is.nan(test$p.value) & algemeen$benader_chisq){
+                test = svychisq(formula=as.formula(paste0("~dummy.", var, ".", answer, "+dummy._col", col)),
+                                design=design.subset, statistic="Chisq")
+                msg("Bij variabele %s met antwoord %s (%s) kon de p-waarde niet met worden berekend met F (Rao–Scott second order).  Nu schatting op basis van Chisq (Rao–Scott first order).",
+                    var, answer, var_labels$label[var_labels$var == var & var_labels$val == answer], level=WARN)
+              }
               pvals[answer] = test$p.value
             },
             error=function (e) msg("Bij variabele %s met antwoord %s (%s) kon geen p-waarde worden berekend. Foutmelding: %s",

@@ -62,7 +62,7 @@ log.save = T
   
   
   # algemene instellingen voor de libraries
-  options(survey.lonely.psu="certainty")
+  options(survey.lonely.psu="certainty") 
   options("openxlsx.paperSize"=9) # A4
   options("openxlsx.orientation"="landscape")
   options("openxlsx.numFmt"="0") # standaardformaat zonder decimalen (anders 0.0 invullen)
@@ -120,6 +120,11 @@ log.save = T
     msg("Het is van belang om deze opties alsnog toe te voegen aan de configuratie; in een volgende versie van het script zal deze waarschuwing vervangen worden door een fout.", level=WARN)
     algemeen$vraag_verbergen_bij_missend_antwoord = F
     algemeen$afkapwaarde_antwoord = 0.0
+  }
+  if (!("benader_chisq" %in% colnames(algemeen))){
+    msg("Let op! Er is een nieuwe optie toegevoegd aan het tabblad algemeen: benader_chisq. (Zie de handleiding.)", level=WARN)
+    msg("Deze opties missen momenteel in de configuratie. Er wordt nu de standaardwaarde ONWAAR aangenomen", level=WARN)
+    algemeen$benader_chisq <- F
   }
   
   # bestaat het templatebestand voor digitoegankelijkheid? (indien gewenst)
