@@ -673,7 +673,7 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
           n.cache = n_var
         
         # de vraag moet wel vast geprint worden; de cache wordt zonder vraag geprint, aangezien dit vaak geen aparte vraag nodig heeft
-        table.output = c(table.output, paste0("<h4 class=\"vraag\">", HTMLencode(var_labels$label[var_labels$var == indeling_rijen$inhoud[i] & var_labels$val == "var"]), "</h4>"))
+        table.output = c(table.output, paste0("<h4 class=\"heading vraag\">", HTMLencode(var_labels$label[var_labels$var == indeling_rijen$inhoud[i] & var_labels$val == "var"]), "</h4>"))
       }
       
       # TODO: herschrijven
