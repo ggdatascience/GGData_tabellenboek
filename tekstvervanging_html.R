@@ -19,6 +19,9 @@ search = read.xlsx(choose.files(caption="Selecteer configuratiebestand...",
 if (any(!c("vraag", "oud", "nieuw") %in% colnames(search))) {
   stop("De benodigde kolommen ontbreken; vraag, oud of nieuw.")
 }
+# in HTML worden leestekens soms aangepast, dus dat moeten we hier ook even doen
+search$vraag = str_replace_all(search$vraag, "[/&;]", ".*?")
+search$oud = str_replace_all(search$oud, "[/&;]", ".*?")
 #search = data.frame(vraag="Ervaren gezondheid in 3", oud="Vrouw", nieuw="Test")
 
 files = choose.files(caption="Selecteer tabellenboeken", filters=c("HTML-bestand (*.html)","*.html"))
