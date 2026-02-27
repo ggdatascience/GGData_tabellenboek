@@ -172,6 +172,7 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
   A_TOOSMALL = -1
   Q_TOOSMALL = -2
   Q_MISSING = -3
+  A_EXACTZERO = -4
   
   c = 1 # teller voor rijen in Excel
   
@@ -351,6 +352,7 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
           output[vals,j] = data.var$n[data.var$col.index == j & data.var$val %in% rownames(output)]
         
         # waarden onder de afkapgrens vervangen
+        output[which(output[,j] == 0), j] = A_EXACTZERO
         output[which(output[,j] <= algemeen$afkapwaarde_antwoord),j] = A_TOOSMALL
         
         #PS:
@@ -535,6 +537,7 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
           val = algemeen$tekst_missende_data
           if (as.numeric(replacement$val[i]) == Q_TOOSMALL) val = algemeen$tekst_min_vraag_niet_gehaald
           if (as.numeric(replacement$val[i]) == A_TOOSMALL) val = algemeen$tekst_min_antwoord_niet_gehaald
+          if (as.numeric(replacement$val[i]) == A_EXACTZERO) val = "<1 EXACT ZERO"
           writeData(wb, subset.name, val, startCol=replacement$col[i], startRow=c+replacement$row[i]-1, colNames=F)
         }
       }
