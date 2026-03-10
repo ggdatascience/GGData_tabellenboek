@@ -86,3 +86,51 @@ identical.enough = function (x, y) {
   }
   return(is.identical)
 }
+
+# bepaal welke rijen meegeteld/getoond moeten worden op basis van dichotoom regels
+add_dichotoom_flags = function (results, dichotoom, niet_dichotoom, algemeen) {
+  if (!"val" %in% colnames(results)) {
+    return(results)
+  }
+  if (is.null(algemeen$waarden_dichotoom)) {
+    return(results)
+  }
+
+  dichotoom.vals = algemeen$waarden_dichotoom %>%
+    str_split("\\|") %>%
+    unlist() %>%
+    str_split(",") %>%
+    lapply(as.numeric)
+
+  var_levels = results %>%
+    filter(!is.na(val)) %>%
+    group_by(var) %>%
+    summarize(levels = list(sort(unique(suppressWarnings(as.numeric(val))))), .groups = "drop")
+
+  var_flags = var_levels %>%
+    mutate(
+      is_dichotoom = case_when(
+        var %in% niet_dichotoom ~ FALSE,
+        var %in% dichotoom ~ TRUE,
+        TRUE ~ purrr::map_lgl(levels, ~ {
+          lv = .x
+          if (length(lv) == 0) return(FALSE)
+          isTRUE(all.equal(lv, c(0, 1))) ||
+            isTRUE(all.equal(lv, c(0))) ||
+            isTRUE(all.equal(lv, c(1))) ||
+            any(purrr::map_lgl(dichotoom.vals, ~ identical(.x, lv)))
+        })
+      )
+    ) %>%
+    select(var, is_dichotoom)
+
+  results %>%
+    left_join(var_flags, by = "var") %>%
+    mutate(
+      is_dichotoom = if_else(
+        coalesce(is_dichotoom, FALSE),
+        !is.na(val) & suppressWarnings(as.numeric(val)) == 1,
+        TRUE
+      )
+    )
+}

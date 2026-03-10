@@ -921,6 +921,11 @@ log.save = T
         # deze functie werd eerst meerdere keren aangeroepen in tbl_MakeExcel, wat natuurlijk veel meer resources kost
         # helaas zijn de resultaten die inmiddels opgeslagen zijn wel volgens de oude manier berekend, dus moeten we de correctie voor de zekerheid uitvoeren
         results = results %>% distinct()
+
+        # include-flags toevoegen voor output/MTC (backwards compatible)
+        if (!"is_dichotoom" %in% colnames(results)) {
+          results = add_dichotoom_flags(results, dichotoom, niet_dichotoom, algemeen)
+        }
         
         # Backwards compatible check voor opgeslagen alpha 
         alpha_file = sprintf("resultaten_csv/alphas_%s.csv", basename(config.file))
@@ -1066,6 +1071,11 @@ log.save = T
         (t.end-t.start)/60, nrow(varlist), mean(t.vars), min(t.vars), max(t.vars), level=MSG)
     
     results = results %>% distinct()
+
+    # include-flags toevoegen voor output/MTC (backwards compatible)
+    if (!"is_dichotoom" %in% colnames(results)) {
+      results = add_dichotoom_flags(results, dichotoom, niet_dichotoom, algemeen)
+    }
     
     # MTC Berekenen VOORDAT we opslaan
     
@@ -1083,20 +1093,23 @@ log.save = T
     # stiekem overschrijven we algemeen$confidence_level dan met de gecorrigeerde afkapwaarde
     
     if("multiple_testing_correction" %in% colnames(algemeen) && !is.na(algemeen$multiple_testing_correction)) {
-      
-      sign_indexes = !is.na(results$sign.vs)
-      
+
       # op dit punt hebben we een tabel met precies de uitgevoerde toetsen;
       # - crossings hebben een n_total van[aantal antwoordmogelijkheden * aantal crossings] en een n van [aantal antwoordmogelijkheden]
-      # - dichotome variabelen hebben een n van 2 (dus gelijk aan crossings, indien n 2 is)
+      # - dichotome variabelen hebben een n van 2, maar we nemen er maar 1 mee in de telling, omdat 0 vs. 1 hetzelfde is als 1 vs. 0
       # hierdoor kunnen we simpelweg het aantal rijen tellen, en dan hebben we het aantal testen
       
-      sign_tests = results[sign_indexes,] %>%
+      
+      sign_tests = results %>%
+        # Alleen toetsen op de variabelen die uiteindelijk in tabbellenboek komen
+        filter(!is.na(sign.vs)) %>%
+        # Van dichotome variabelen, alleen de 1 meenemen (omdat 0 vs. 1 hetzelfde is als 1 vs. 0, en we anders het aantal testen dubbel tellen)
+        filter(!(is_dichotoom & val == 0)) %>%
         group_by(subset, subset.val, year, crossing, crossing.val, var, sign.vs, sign) %>%
         summarize(n=n(), .groups='drop') %>%
         group_by(subset, subset.val, year, crossing, var, sign.vs, sign) %>%
         summarize(n_total=sum(n), crossing_n=n(), n=n_total/crossing_n, .groups='drop')
-      
+
       # Bereken MTC gegroepeerd per subset
       mtc_per_subset = sign_tests %>%
         group_by(subset, subset.val) %>%
@@ -1168,16 +1181,6 @@ log.save = T
   
   ##### begin wegschrijven tabellenboeken
   basefilename = coalesce(opmaak$waarde[opmaak$type == "naam_tabellenboek"], "Overzicht")
-  
-
-
-  source(paste0(dirname(this.path()), "/tbl_MakeKubus.R"))
-  if (algemeen$swing_output) {
-    MaakKubusData(data = data,
-                  configuraties = swing_configuraties,
-                  variabelen = swing_variabelen,
-                  crossings = swing_crossings)
-  }
 
   # controleren of de gewenste logo's bestaan - anders kunnen de HTML- en Excel-functies ze niet openen
   if (nrow(logos) > 0) {

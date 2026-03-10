@@ -482,29 +482,33 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
           if (col.design$subset[j] != subset) {
             subset.col = subsetmatches[subsetmatches[,1] == subset.val, col.design$subset[j]]
           }
+          cols = c("val", "crossing", "crossing.val", "sign", "sign.vs", "n.unweighted", "perc.weighted", "display_include", "is_dichotoom")
+          cols = cols[cols %in% colnames(results)]
           data.tmp = results[which(NA.identical(results$dataset, col.design$dataset[j]) & NA.identical(results$subset, col.design$subset[j]) &
                                      NA.identical(results$subset.val, subset.col) &
                                      NA.identical(results$year, col.design$year[j]) & NA.identical(results$crossing, col.design$crossing[j]) &
                                      NA.identical(results$crossing.val, col.design$crossing.val[j]) & NA.identical(results$sign.vs, col.design$test.col[j]) &
                                      results$var == indeling_rijen$inhoud[i]),
-                             c("val", "crossing", "crossing.val", "sign", "sign.vs", "n.unweighted", "perc.weighted")]
+                             cols, drop = FALSE]
           if (nrow(data.tmp) == 0) next
           data.tmp$col.index = col.design$col.index[j]
           data.var = bind_rows(data.var, data.tmp)
         }
         else {
+          cols = c("val", "crossing", "crossing.val", "sign", "sign.vs", "n.unweighted", "perc.weighted", "display_include", "is_dichotoom")
+          cols = cols[cols %in% colnames(results)]
           data.tmp = results[which(NA.identical(results$dataset, col.design$dataset[j]) & NA.identical(results$subset, col.design$subset[j]) &
                                      is.na(results$subset.val) &
                                      NA.identical(results$year, col.design$year[j]) & NA.identical(results$crossing, col.design$crossing[j]) &
                                      NA.identical(results$crossing.val, col.design$crossing.val[j]) & NA.identical(results$sign.vs, col.design$test.col[j]) &
                                      results$var == indeling_rijen$inhoud[i]),
-                             c("val", "crossing", "crossing.val", "sign", "sign.vs", "n.unweighted", "perc.weighted")]
+                             cols, drop = FALSE]
           if (nrow(data.tmp) == 0) next
           data.tmp$col.index = col.design$col.index[j]
           data.var = bind_rows(data.var, data.tmp)
         }
       }
-      
+            
       # aantal respondenten per vraag ophalen
       n_var = data.var %>%
         group_by(col.index) %>%
@@ -609,21 +613,18 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
         output = output[desired_rownums,]
       }
       
+      
+
       # dichotoom? zo ja, alleen 1 (= ja) laten zien en geen kop met de vraag
       # zo nee, kop met de vraag en alle waardes laten zien
-      levels.var = sort(as.numeric(unique(data.var$val)))
-      dichotoom.vals = algemeen$waarden_dichotoom %>% 
-        str_split("\\|") %>%
-        unlist() %>%
-        str_split(",") %>%
-        lapply(as.numeric)
+      # is_dichotoom wordt bepaald via add_dichotoom_flags() in tbl_helpers.R
+      if (!"is_dichotoom" %in% colnames(data.var)) {
+        # fallback: resultaten zonder is_dichotoom (bijv. oude cache); berekenen met helper
+        data.var = add_dichotoom_flags(data.var, dichotoom, niet_dichotoom, algemeen)
+      }
+      is_dich = any(data.var$is_dichotoom, na.rm = TRUE)
       
-      if (!indeling_rijen$inhoud[i] %in% niet_dichotoom &&
-          (indeling_rijen$inhoud[i] %in% dichotoom ||
-           isTRUE(all.equal(levels.var, c(0, 1))) ||
-           isTRUE(all.equal(levels.var, c(0))) ||
-           isTRUE(all.equal(levels.var, c(1))) ||
-           any(unlist(lapply(dichotoom.vals, function (x) { return(identical(x, levels.var)) }))))) {
+      if (is_dich) {
         output = output %>%
           filter(val == 1) %>%
           mutate(label=var_labels$label[var_labels$var == indeling_rijen$inhoud[i] & var_labels$val == "var"], .after=val) %>%
