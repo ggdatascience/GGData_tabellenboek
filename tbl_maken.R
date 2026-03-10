@@ -231,6 +231,12 @@ log.save = T
       algemeen$swing_afkapwaarde <- NA
     }
     
+    if (!"swing_unit" %in% colnames(algemeen)) {
+
+      algemeen$swing_unit <- NA
+
+    }
+
     # Swing_configuraties$gebiedsniveau mag niet leeg zijn
     if (any(is.na(swing_configuraties$gebiedsniveau))) {
       msg("In tabblad swing_configuraties is het gebiedsniveau niet ingevuld op rij(s) %s. Vul dit in, dit is verplicht voor swing analyses.",

@@ -9,7 +9,8 @@ MaakKubusData <- function(
     crossings,
     algemeen = NULL,
     afkapwaarde = -99996,
-    output_bestandsnaam_prefix = "kubusdata",
+    swing_output_bestandsnaam = "kubusdata",
+    swing_unit = "p",
     output_folder = "output_swing",
     max_char_labels = 100,
     dummy_crossing_var = "dummy_crossing"
@@ -28,10 +29,22 @@ MaakKubusData <- function(
   min_obs_vraag <- if(!is.null(algemeen$min_observaties_per_vraag)) as.numeric(algemeen$min_observaties_per_vraag) else 0
   min_obs_cel   <- if(!is.null(algemeen$min_observaties_per_antwoord)) as.numeric(algemeen$min_observaties_per_antwoord) else 0
   
+  # Outputnaam uit config overschrijft standaardwaarde voor herkenbare output-map.
+  if (!is.na(algemeen$swing_output_bestandsnaam)) {
+    swing_output_bestandsnaam <- as.character(algemeen$swing_output_bestandsnaam)
+    msg("Outputnaam voor Swing opgehaald uit config: %s", swing_output_bestandsnaam, level = MSG)
+  }
+  
   # Afkapwaarde uit config overschrijft standaardwaarde zodat masking consistent is met Swing.
   if (!is.na(algemeen$swing_afkapwaarde)) {
     afkapwaarde <- as.numeric(algemeen$swing_afkapwaarde)
-    msg("Afkapwaarde voor swing opgehaald uit config: %s", afkapwaarde, level = MSG)
+    msg("Afkapwaarde voor Swing opgehaald uit config: %s", afkapwaarde, level = MSG)
+  }
+  
+  #Unit-waarde uit config overschrijft standaard unit zodat unitwaarde zoals gewenst is.
+  if (!is.na(algemeen$swing_unit)) {  
+    swing_unit <- as.character(algemeen$swing_unit) 
+    msg("Unit voor Swing opgehaald uit config: %s", swing_unit, level = MSG)
   }
   
   # Variabelen voorbereiden en ontdubbelen om dubbele rijen in configs te voorkomen.
@@ -274,10 +287,10 @@ MaakKubusData <- function(
       if (nrow(kubusdata) == 0) {
         if (is_kubus) {
           out_dir <- file.path(output_folder, as.character(args$jaar_voor_analyse), as.character(args$gebiedsniveau))
-          bestandsnaam <- file.path(out_dir, paste0(output_bestandsnaam_prefix, "_", args$vars, "_", args$crossings, ".xlsx"))
+          bestandsnaam <- file.path(out_dir, paste0(swing_output_bestandsnaam, "_", args$vars, "_", args$crossings, ".xlsx"))
         } else {
           out_dir <- file.path(output_folder, as.character(args$jaar_voor_analyse), paste0(as.character(args$gebiedsniveau), "_totaal"))
-          bestandsnaam <- file.path(out_dir, paste0(output_bestandsnaam_prefix, "_", args$vars, ".xlsx"))
+          bestandsnaam <- file.path(out_dir, paste0(swing_output_bestandsnaam, "_", args$vars, ".xlsx"))
         }
         msg("Geen data over voor kubus export voor variabele %s: %s (mogelijk alles missing).",args$vars, bestandsnaam, level = WARN)
         return()
@@ -459,7 +472,7 @@ MaakKubusData <- function(
         `Indicator code` = indicator_codes,
         Name = indicator_names,
         Unit = c(rep("personen", length(ans_values) + 2),
-                 if (is_dichotoom) "percentage" else rep("percentage", length(ans_values))),
+                 if (is_dichotoom) swing_unit else rep(swing_unit, length(ans_values))),
         `Aggregation indicator` = c(rep("", length(ans_values) + 2),
                                     if (is_dichotoom) paste0(args$vars, "_GEW") else rep(paste0(args$vars, "_GEW"), length(ans_values))),
         Formula = formulas,
@@ -481,11 +494,11 @@ MaakKubusData <- function(
       if (is_kubus) {
         out_dir <- file.path(output_folder, as.character(args$jaar_voor_analyse), as.character(args$gebiedsniveau))
         if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
-        bestandsnaam <- file.path(out_dir, paste0(output_bestandsnaam_prefix, "_", args$vars, "_", args$crossings, ".xlsx"))
+        bestandsnaam <- file.path(out_dir, paste0(swing_output_bestandsnaam, "_", args$vars, "_", args$crossings, ".xlsx"))
       } else {
         out_dir <- file.path(output_folder, as.character(args$jaar_voor_analyse), paste0(as.character(args$gebiedsniveau), "_totaal"))
         if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
-        bestandsnaam <- file.path(out_dir, paste0(output_bestandsnaam_prefix, "_", args$vars, ".xlsx"))
+        bestandsnaam <- file.path(out_dir, paste0(swing_output_bestandsnaam, "_", args$vars, ".xlsx"))
       }
       
       # Schrijfbestand opslaan; errors loggen zonder het hele proces te stoppen.
