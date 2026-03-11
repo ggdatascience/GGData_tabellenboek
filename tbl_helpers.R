@@ -130,7 +130,7 @@ add_dichotoom_flags = function (results, dichotoom, niet_dichotoom, algemeen) {
       is_dichotoom = if_else(
         coalesce(is_dichotoom, FALSE),
         !is.na(val) & suppressWarnings(as.numeric(val)) == 1,
-        TRUE
+        FALSE
       )
     )
 }
