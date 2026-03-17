@@ -400,6 +400,7 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
   table.cache = NULL # hier is NULL nodig i.p.v. NA, omdat is.na() een vector teruggeeft, en we willen alleen weten of de variabele gevuld is of niet
   question.cache = NA
   n.cache = NULL
+  
   for (i in 1:nrow(indeling_rijen)) {
     # als er iets in de tijdelijke opslag zit en de huidige regel != "var" of "nvar", printen
     if (!is.null(table.cache) && !indeling_rijen$type[i] %in% c("var", "nvar")) {

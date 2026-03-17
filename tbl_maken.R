@@ -1,7 +1,7 @@
 #
 # Dit script maakt tabellenboeken op basis van gezondheidsmonitors. 
 # De configuratie gaat middels een Excelsheet, zie bijgevoegde documentatie.
-# Problemen en verzoeken kunnen worden ingediend op:
+# Problemen en verzoeken kunnen worden ingediend op
 # https://github.com/ggdatascience/GGData_tabellenboek
 #
 # Versie: concept
@@ -985,7 +985,7 @@ log.save = T
     # - dichotome variabelen hebben een n van 2 (dus gelijk aan crossings, indien n 2 is)
     # hierdoor kunnen we simpelweg het aantal rijen tellen, en dan hebben we het aantal testen
     n_sign_tests = nrow(sign_tests)
-    
+    browser()
     if ("aantal_toetsen" %in% colnames(algemeen) && !is.na(algemeen$aantal_toetsen)) {
       n_sign_tests = algemeen$aantal_toetsen
       msg("Let op! Het aantal toetsen voor de multiple testing correction is vanuit de configuratie omgezet van %d naar %d. Als dit niet de bedoeling is, pas dan de configuratie aan.",
