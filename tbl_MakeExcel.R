@@ -172,6 +172,7 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
   A_TOOSMALL = -1
   Q_TOOSMALL = -2
   Q_MISSING = -3
+  A_EXACTZERO = -4
   
   c = 1 # teller voor rijen in Excel
   
@@ -355,7 +356,8 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
           output[vals,j] = data.var$n[data.var$col.index == j & data.var$val %in% rownames(output)]
         
         # waarden onder de afkapgrens vervangen
-        output[which(output[,j] <= algemeen$afkapwaarde_antwoord),j] = A_TOOSMALL
+        output[which(output[,j] == 0), j] = A_EXACTZERO
+        output[which(output[,j] <= algemeen$afkapwaarde_antwoord & output[,j] > 0) ,j] = A_TOOSMALL
         
         #PS:
         #Metingen die o.b.v te lage aantallen zijn vervangen 
@@ -525,7 +527,7 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
       addStyle(wb, subset.name, style.num, cols=3:n.col.total, rows=c:(c+nrow(output)), gridExpand=T, stack=T)
       
       # missende waardes goed weergeven
-      missing = which(output == Q_MISSING | output == Q_TOOSMALL | output == A_TOOSMALL, arr.ind=T)
+      missing = which(output == Q_MISSING | output == Q_TOOSMALL | output == A_TOOSMALL | output == A_EXACTZERO, arr.ind=T)
       if (length(missing) > 0) {
         # vanwege gekke R logica mag de waarde geen naam hebben (unname) en moet het gedwongen een matrix zijn
         replacement = data.frame(row=missing[,1], col=missing[,2], val=matrix(unname(output[missing])))
@@ -534,6 +536,7 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
           val = algemeen$tekst_missende_data
           if (as.numeric(replacement$val[i]) == Q_TOOSMALL) val = algemeen$tekst_min_vraag_niet_gehaald
           if (as.numeric(replacement$val[i]) == A_TOOSMALL) val = algemeen$tekst_min_antwoord_niet_gehaald
+          if (as.numeric(replacement$val[i]) == A_EXACTZERO) val = "0"
           writeData(wb, subset.name, val, startCol=replacement$col[i], startRow=c+replacement$row[i]-1, colNames=F)
         }
       }
