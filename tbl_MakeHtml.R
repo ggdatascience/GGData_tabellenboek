@@ -11,6 +11,7 @@
 A_TOOSMALL = -1
 Q_TOOSMALL = -2
 Q_MISSING = -3
+A_EXACTZERO = -4
 
 # functie om vergelijken met NA mogelijk te maken
 # LET OP: de naam is ietwat verwarrend; de werking is juist NIET gelijk aan identical()
@@ -126,6 +127,9 @@ BuildHtmlTableRows = function (input, col.design, n=F) {
       } else if (val == Q_MISSING) {
         val = algemeen$tekst_missende_data
         htmlclass = c(htmlclass, "data_missend")
+      } else if (val == A_EXACTZERO) {
+        val = sprintf("%s%s", ifelse(n, "n=", ""), "0")
+        htmlclass = c(htmlclass, "antwoord_exact_nul")
       } else {
         val = sprintf("%s%.0f", ifelse(n, "n=", ""), val)
       } 
@@ -400,6 +404,7 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
   table.cache = NULL # hier is NULL nodig i.p.v. NA, omdat is.na() een vector teruggeeft, en we willen alleen weten of de variabele gevuld is of niet
   question.cache = NA
   n.cache = NULL
+  
   for (i in 1:nrow(indeling_rijen)) {
     # als er iets in de tijdelijke opslag zit en de huidige regel != "var" of "nvar", printen
     if (!is.null(table.cache) && !indeling_rijen$type[i] %in% c("var", "nvar")) {
@@ -541,7 +546,8 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
           output[vals,j] = data.var$n[data.var$col.index == col.design$col.index[j] & data.var$val %in% rownames(output)]
         
         # waarden onder de afkapgrens vervangen
-        output[which(output[,j] <= algemeen$afkapwaarde_antwoord),j] = A_TOOSMALL
+        output[which(output[, j] == 0), j] = A_EXACTZERO
+        output[which(output[, j] <= algemeen$afkapwaarde_antwoord & output[, j] > 0), j] = A_TOOSMALL
         
         #PS:
         #Metingen die o.b.v te lage aantallen zijn vervangen 

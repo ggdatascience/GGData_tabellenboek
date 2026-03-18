@@ -1,7 +1,7 @@
 #
 # Dit script maakt tabellenboeken op basis van gezondheidsmonitors. 
 # De configuratie gaat middels een Excelsheet, zie bijgevoegde documentatie.
-# Problemen en verzoeken kunnen worden ingediend op:
+# Problemen en verzoeken kunnen worden ingediend op
 # https://github.com/ggdatascience/GGData_tabellenboek
 #
 # Versie: concept
