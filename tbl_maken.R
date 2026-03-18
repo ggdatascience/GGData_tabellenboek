@@ -1093,69 +1093,76 @@ log.save = T
     # stiekem overschrijven we algemeen$confidence_level dan met de gecorrigeerde afkapwaarde
     
     if("multiple_testing_correction" %in% colnames(algemeen) && !is.na(algemeen$multiple_testing_correction)) {
-
+      
       # op dit punt hebben we een tabel met precies de uitgevoerde toetsen;
       # - crossings hebben een n_total van[aantal antwoordmogelijkheden * aantal crossings] en een n van [aantal antwoordmogelijkheden]
       # - dichotome variabelen hebben een n van 2, maar we nemen er maar 1 mee in de telling, omdat 0 vs. 1 hetzelfde is als 1 vs. 0
       # hierdoor kunnen we simpelweg het aantal rijen tellen, en dan hebben we het aantal testen
       
       
-      sign_tests = results %>%
-        # Alleen toetsen op de variabelen die uiteindelijk in tabbellenboek komen
-        filter(!is.na(sign.vs)) %>%
-        # Van dichotome variabelen, alleen de 1 meenemen (omdat 0 vs. 1 hetzelfde is als 1 vs. 0, en we anders het aantal testen dubbel tellen)
-        filter(!(is_dichotoom & val == 0)) %>%
-        group_by(subset, subset.val, year, crossing, crossing.val, var, sign.vs, sign) %>%
-        summarize(n=n(), .groups='drop') %>%
-        group_by(subset, subset.val, year, crossing, var, sign.vs, sign) %>%
-        summarize(n_total=sum(n), crossing_n=n(), n=n_total/crossing_n, .groups='drop')
+      # Step 1: Identify actual tests performed per subset
+      # - For dichotomous variables: count only one test per variable per crossing
+      # - For other variables: count unique (var, crossing, answer) combinations
 
-      # Bereken MTC gegroepeerd per subset
-      mtc_per_subset = sign_tests %>%
+      sign_tests_actual = results %>%
+        filter(!is.na(sign.vs)) %>%
+        mutate(
+          test_id = ifelse(
+            is_dichotoom,
+            paste(subset, subset.val, year, crossing, var, sep = "_"),
+            paste(subset, subset.val, year, crossing, var, val, sep = "_")
+          )
+        ) %>%
+        distinct(test_id, .keep_all = TRUE)
+
+      # Step 2: Count tests per subset
+      n_sign_tests_per_subset = sign_tests_actual %>%
         group_by(subset, subset.val) %>%
-        group_modify(~ {
-          n_sign_tests = nrow(.x)
-          
-          if ("aantal_toetsen" %in% colnames(algemeen) && !is.na(algemeen$aantal_toetsen)) {
-            n_sign_tests = algemeen$aantal_toetsen
-            # Waarschuwing wordt later globaal gegeven om spam per subset te voorkomen
-          }
-          
-          corrected_alpha = algemeen$confidence_level
-          
-          if (grepl("bh|benjamini|hochberg", algemeen$multiple_testing_correction, ignore.case=T)) {
-            pvals = sort(.x$sign[!is.na(.x$sign)])
-            if(length(pvals) > 0) {
-              bh.table = matrix(nrow = length(pvals), ncol = 3)
-              bh.table[,1] = pvals
-              bh.table[,2] = (1:n_sign_tests)[1:length(pvals)]
-              bh.table[,3] = (bh.table[,2]/n_sign_tests) * algemeen$confidence_level # berekening Aart
-              
-              if (sum(bh.table[,1] < bh.table[,3]) < 1) {
-                # geen enkele significante waarde
-                corrected_alpha = 1e-20
-              } else {
-                corrected_alpha = max(bh.table[bh.table[,1] < bh.table[,3],1])
+        summarize(n_sign_tests = n(), .groups = 'drop')
+
+      # Step 3: Apply multiple testing correction per subset
+      mtc_per_subset = n_sign_tests_per_subset %>%
+        rowwise() %>%
+        mutate(
+          corrected_alpha = {
+            n_sign_tests = n_sign_tests
+            corrected_alpha = algemeen$confidence_level
+            
+            if ("multiple_testing_correction" %in% colnames(algemeen) && !is.na(algemeen$multiple_testing_correction)) {
+              if (grepl("bh|benjamini|hochberg", algemeen$multiple_testing_correction, ignore.case = TRUE)) {
+                pvals = sort(sign_tests_actual %>% filter(subset == cur_data()$subset, subset.val == cur_data()$subset.val) %>% pull(sign))
+                if (length(pvals) > 0) {
+                  bh.table = matrix(nrow = length(pvals), ncol = 3)
+                  bh.table[,1] = pvals
+                  bh.table[,2] = (1:n_sign_tests)[1:length(pvals)]
+                  bh.table[,3] = (bh.table[,2]/n_sign_tests) * algemeen$confidence_level
+                  if (sum(bh.table[,1] < bh.table[,3]) < 1) {
+                    corrected_alpha = 1e-20
+                  } else {
+                    corrected_alpha = max(bh.table[bh.table[,1] < bh.table[,3],1])
+                  }
+                } else {
+                  corrected_alpha = 1e-20
+                }
+              } else if (grepl("bf|bonferonni|bonferroni", algemeen$multiple_testing_correction, ignore.case = TRUE)) {
+                corrected_alpha = algemeen$confidence_level / n_sign_tests
               }
-            } else {
-              corrected_alpha = 1e-20
             }
-          } else if (grepl("bf|bonferonni|bonferroni", algemeen$multiple_testing_correction, ignore.case=T)) {
-            corrected_alpha = algemeen$confidence_level / n_sign_tests
+            corrected_alpha
           }
-          
-          tibble(corrected_alpha = corrected_alpha, n_tests = n_sign_tests)
-        }) %>%
-        ungroup()
-      
+        ) %>%
+        ungroup() %>%
+        select(subset, subset.val, corrected_alpha, n_sign_tests)
+
+      # Step 4: Message and fallback
       if ("aantal_toetsen" %in% colnames(algemeen) && !is.na(algemeen$aantal_toetsen)) {
         msg("Let op! Het aantal toetsen voor de multiple testing correction is vanuit de configuratie omgezet naar %d. Als dit niet de bedoeling is, pas dan de configuratie aan.", algemeen$aantal_toetsen, level=WARN)
       }
       msg("Multiple Testing Correctie (%s) is berekend PER SUBSET.", algemeen$multiple_testing_correction, level=MSG)
-      
+
+      # Fallback for no correction
     } else {
-      # Geen MTC gewenst, maak een lege dummy dataframe
-      mtc_per_subset = data.frame(subset=character(), subset.val=numeric(), corrected_alpha=numeric(), n_tests=numeric())
+      mtc_per_subset = data.frame(subset=character(), subset.val=numeric(), corrected_alpha=numeric(), n_sign_tests=numeric())
     }
     
     # resultaten opslaan voor hergebruik
