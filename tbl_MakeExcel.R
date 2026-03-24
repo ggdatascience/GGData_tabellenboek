@@ -357,14 +357,15 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
         
         #PS:
         #Metingen die o.b.v te lage aantallen zijn vervangen 
+        ongewogen_aantal <- data.var$n.unweighted[data.var$col.index == j]
         if (!is.na(indeling_rijen$verberg_crossings[i]) && !is.na(col.design$crossing[j])) {
           output[,j] = Q_MISSING
-        } else if (sum(data.var$n.unweighted[data.var$col.index == j], na.rm=T) == 0) {
+        } else if (sum(ongewogen_aantal, na.rm=T) == 0) {
           output[,j] = Q_MISSING
-        } else if (sum(data.var$n.unweighted[data.var$col.index == j], na.rm=T) < algemeen$min_observaties_per_vraag) {
+        } else if (sum(ongewogen_aantal, na.rm=T) < algemeen$min_observaties_per_vraag) {
           #Alle percentages wegstrepen als aantallen per groep te klein zijn.
           output[,j] <- Q_TOOSMALL
-        } else if(any(data.var$n.unweighted[data.var$col.index == j] < algemeen$min_observaties_per_antwoord, na.rm=T)) {
+        } else if(any(ongewogen_aantal < algemeen$min_observaties_per_antwoord & ongewogen_aantal > 0, na.rm=T)) {
           # Bij een cel met te weinig antwoorden zijn er twee opties:
           # 1) De hele kolom verbergen, om herleidbaarheid te voorkomen.
           # 2) Alleen die cel verbergen.
