@@ -487,7 +487,7 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
           if (col.design$subset[j] != subset) {
             subset.col = subsetmatches[subsetmatches[,1] == subset.val, col.design$subset[j]]
           }
-          cols = c("val", "crossing", "crossing.val", "sign", "sign.vs", "n.unweighted", "perc.weighted", "display_include", "is_dichotoom")
+          cols = c("val", "crossing", "crossing.val", "sign", "sign.vs", "n.unweighted", "n_question", "perc.weighted", "display_include", "is_dichotoom")
           cols = cols[cols %in% colnames(results)]
           data.tmp = results[which(NA.identical(results$dataset, col.design$dataset[j]) & NA.identical(results$subset, col.design$subset[j]) &
                                      NA.identical(results$subset.val, subset.col) &
@@ -500,7 +500,7 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
           data.var = bind_rows(data.var, data.tmp)
         }
         else {
-          cols = c("val", "crossing", "crossing.val", "sign", "sign.vs", "n.unweighted", "perc.weighted", "display_include", "is_dichotoom")
+          cols = c("val", "crossing", "crossing.val", "sign", "sign.vs", "n.unweighted", "n_question", "perc.weighted", "display_include", "is_dichotoom")
           cols = cols[cols %in% colnames(results)]
           data.tmp = results[which(NA.identical(results$dataset, col.design$dataset[j]) & NA.identical(results$subset, col.design$subset[j]) &
                                      is.na(results$subset.val) &
@@ -550,12 +550,16 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
         output[which(output[, j] <= algemeen$afkapwaarde_antwoord & output[, j] > 0), j] = A_TOOSMALL
         
         #PS:
-        #Metingen die o.b.v te lage aantallen zijn vervangen 
+        #Metingen die o.b.v te lage aantallen zijn vervangen
+        # n_question is vooraf berekend in tbl_maken.R (vraag-niveau n per kolomgroep)
+        n_q_vals <- data.var$n_question[data.var$col.index == col.design$col.index[j]]
+        n_q <- if (length(n_q_vals) > 0) n_q_vals[1] else 0
+
         if (!is.na(indeling_rijen$verberg_crossings[i]) && !is.na(col.design$crossing[j])) {
           output[,j] = Q_MISSING
-        } else if (sum(data.var$n.unweighted[data.var$col.index == col.design$col.index[j]], na.rm=T) == 0) {
+        } else if (n_q == 0) {
           output[,j] = Q_MISSING
-        } else if (sum(data.var$n.unweighted[data.var$col.index == col.design$col.index[j]], na.rm=T) < algemeen$min_observaties_per_vraag) {
+        } else if (n_q < algemeen$min_observaties_per_vraag) {
           #Alle percentages wegstrepen als aantallen per groep te klein zijn.
           output[,j] <- Q_TOOSMALL
         } else if(any(data.var$n.unweighted[data.var$col.index == col.design$col.index[j]] < algemeen$min_observaties_per_antwoord, na.rm=T)) {

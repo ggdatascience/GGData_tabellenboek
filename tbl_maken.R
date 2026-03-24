@@ -232,11 +232,11 @@ log.save = T
     }
     
     if (!"swing_unit" %in% colnames(algemeen)) {
-
+      
       algemeen$swing_unit <- NA
-
+      
     }
-
+    
     # Swing_configuraties$gebiedsniveau mag niet leeg zijn
     if (any(is.na(swing_configuraties$gebiedsniveau))) {
       msg("In tabblad swing_configuraties is het gebiedsniveau niet ingevuld op rij(s) %s. Vul dit in, dit is verplicht voor swing analyses.",
@@ -257,7 +257,7 @@ log.save = T
     swing_configuraties <- left_join(swing_configuraties, datasets, by = "naam_dataset")
     
   }
-
+  
   
   # variabelelijst afleiden uit de indeling van het tabellenboek;
   # iedere regel met (n)var is een variabele die we nodig hebben
@@ -921,10 +921,18 @@ log.save = T
         # deze functie werd eerst meerdere keren aangeroepen in tbl_MakeExcel, wat natuurlijk veel meer resources kost
         # helaas zijn de resultaten die inmiddels opgeslagen zijn wel volgens de oude manier berekend, dus moeten we de correctie voor de zekerheid uitvoeren
         results = results %>% distinct()
-
+        
         # include-flags toevoegen voor output/MTC (backwards compatible)
         if (!"is_dichotoom" %in% colnames(results)) {
           results = add_dichotoom_flags(results, dichotoom, niet_dichotoom, algemeen)
+        }
+
+        # n_question toevoegen indien afwezig (backwards compatible met oudere cache)
+        if (!"n_question" %in% colnames(results)) {
+          results <- results %>%
+            group_by(var, dataset, subset, subset.val, year, crossing, crossing.val, sign.vs) %>%
+            mutate(n_question = sum(n.unweighted, na.rm = TRUE)) %>%
+            ungroup()
         }
         
         # Backwards compatible check voor opgeslagen alpha 
@@ -1059,9 +1067,9 @@ log.save = T
       
       # Design weer schoonmaken voor volgende iteratie (geheugenmanagement)
       for(col in current_var_cols) {
-          if(!col %in% base_vars_names) {
-              current_design$variables[[col]] <- NULL
-          }
+        if(!col %in% base_vars_names) {
+          current_design$variables[[col]] <- NULL
+        }
       }
     }
     
@@ -1072,106 +1080,159 @@ log.save = T
     
     results = results %>% distinct()
 
-    # include-flags toevoegen voor output/MTC (backwards compatible)
-    if (!"is_dichotoom" %in% colnames(results)) {
-      results = add_dichotoom_flags(results, dichotoom, niet_dichotoom, algemeen)
-    }
-    
-    # MTC Berekenen VOORDAT we opslaan
-    
-    # multiple testing correctie, indien gewenst
-    # normaliter zou je hiervoor p.adjust() kunnen gebruiken, maar er is een probleem;
-    # doordat we een rij hebben per losse waarde en per crossingwaarde krijg je een artificieel hoog aantal testen, wat niet daadwerkelijk zo is
-    # ter voorbeeld: stel dat er 1 crossing is (man/vrouw) voor een vraag met 3 antwoorden, dan zijn er totaal 6 p-waardes; A1 m/v, A2 m/v, A3 m/v (A = antwoord)
-    # dit registreert in p.adjust() dan als 6 testen, terwijl er in de realiteit 3 zijn uitgevoerd; A1 m vs. v, A2 m vs. v, A3 m vs. v
-    # we moeten dus terugrekenen hoeveel testen er daadwerkelijk zijn uitgevoerd
-    # concreet betekent dit:
-    # -> voor iedere rij waarin sign.vs != NA (want anders is er sowieso geen toets uitgevoerd)
-    # -> deel door aantal crossings, indien aanwezig
-    # -> deel door 2 indien dichotoom (makkelijk te herkennen aan precies 2 antwoordmogelijkheden en gelijke p-waarde)
-    # dit is met p.adjust() lastig te corrigeren, dus in plaats daarvan kunnen we gewoon de gewenste p-waarde aanpassen
-    # stiekem overschrijven we algemeen$confidence_level dan met de gecorrigeerde afkapwaarde
-    
+    # Bereken vraag-niveau n per kolomgroep (som van n.unweighted over alle antwoordcategorieën)
+    # Dit is nodig voor MTC (onderdrukte variabelen uitsluiten) en wordt hergebruikt in tbl_MakeExcel/tbl_MakeHtml
+    results <- results %>%
+      mutate(supressed = n.unweighted < algemeen$min_observaties_per_antwoord) %>%
+      group_by(var, dataset, subset, subset.val, year, crossing, crossing.val, sign.vs) %>%
+      mutate(n_question = sum(n.unweighted, na.rm = TRUE)) %>%
+      ungroup()
+
+    # MTC
     if("multiple_testing_correction" %in% colnames(algemeen) && !is.na(algemeen$multiple_testing_correction)) {
+
+      count_tests <- function(results, algemeen, crossings_toetsen, indeling_rijen, dichotoom, niet_dichotoom) {
+        
+        if (!"val" %in% colnames(results)) {
+          return(results)
+        }
+        if (is.null(algemeen$waarden_dichotoom)) {
+          return(results)
+        }
       
-      # op dit punt hebben we een tabel met precies de uitgevoerde toetsen;
-      # - crossings hebben een n_total van[aantal antwoordmogelijkheden * aantal crossings] en een n van [aantal antwoordmogelijkheden]
-      # - dichotome variabelen hebben een n van 2, maar we nemen er maar 1 mee in de telling, omdat 0 vs. 1 hetzelfde is als 1 vs. 0
-      # hierdoor kunnen we simpelweg het aantal rijen tellen, en dan hebben we het aantal testen
-      
-      
+        dichotoom.vals = algemeen$waarden_dichotoom %>%
+          str_split("\\|") %>%
+          unlist() %>%
+          str_split(",") %>%
+          lapply(as.numeric)
+        
+        levels = results %>%
+          filter(!is.na(val)) %>%
+          # Onderdrukte kolommen (Q_MISSING / Q_TOOSMALL), overeenkomstig met tbl_MakeExcel/tbl_MakeHtml
+          filter(n_question >= algemeen$min_observaties_per_vraag) %>%
+          # Onderdrukte rijen (in indeling_rijen), overeenkomstig met tbl_MakeExcel/tbl_MakeHtml
+          filter(!supressed) %>%
+          group_by(subset, subset.val, var, crossing) %>%
+          filter(!all(is.na(sign.vs))) %>%
+          summarize(levels = list(sort(unique(suppressWarnings(as.numeric(val))))), .groups = "drop") |> 
+          mutate(n_levels = purrr::map_int(levels, length))
+        
+        levels_expanded = levels %>%
+          mutate(
+            is_dichotoom = case_when(
+              var %in% niet_dichotoom ~ FALSE,
+              var %in% dichotoom ~ TRUE,
+              TRUE ~ purrr::map_lgl(levels, ~ {
+                lv = .x
+                if (length(lv) == 0) return(FALSE)
+                isTRUE(all.equal(lv, c(0, 1))) ||
+                  isTRUE(all.equal(lv, c(0))) ||
+                  isTRUE(all.equal(lv, c(1))) ||
+                  any(purrr::map_lgl(dichotoom.vals, ~ identical(.x, lv)))
+              })
+            )
+          )
+        
+        indeling_rijen_vars <- indeling_rijen |> 
+          filter(type == "var") |> 
+          select(inhoud, waardes, verberg_crossings) |> 
+          mutate(verberg_crossings = ifelse(is.na(verberg_crossings), FALSE, verberg_crossings))
+        
+        levels_expanded_indeling_rijen <- levels_expanded |> 
+          left_join(indeling_rijen_vars, by = join_by(var == inhoud))
+
+        crossings_toetsen_tibble <- tibble(
+          crossing = names(crossings_toetsen),
+          crossings_toetsen = unname(crossings_toetsen)
+        )
+
+        levels_expanded_indeling_rijen_crossings <- levels_expanded_indeling_rijen |> 
+          left_join(crossings_toetsen_tibble, by = join_by(crossing))
+        
+        tests <- levels_expanded_indeling_rijen_crossings |>
+          mutate(
+            n_sign_tests = case_when(
+              # Volgorde hier is erg belangrijk!
+              coalesce(crossings_toetsen, FALSE) == FALSE ~ 0,
+              coalesce(verberg_crossings, FALSE) == TRUE ~ 0,
+              !is.na(waardes) ~ purrr::map_int(
+                stringr::str_split(waardes, "\\|"), length),
+              is_dichotoom ~ 1,
+              .default = n_levels
+            )
+          )
+
+      }
+
       # Step 1: Identify actual tests performed per subset
       # - For dichotomous variables: count only one test per variable per crossing
       # - For other variables: count unique (var, crossing, answer) combinations
-
-      sign_tests_actual = results %>%
-        filter(!is.na(sign.vs)) %>%
-        mutate(
-          test_id = ifelse(
-            is_dichotoom,
-            paste(subset, subset.val, year, crossing, var, sep = "_"),
-            paste(subset, subset.val, year, crossing, var, val, sep = "_")
-          )
-        ) %>%
-        distinct(test_id, .keep_all = TRUE)
-
+      n_sign_tests <- count_tests(results, algemeen, crossings_toetsen, indeling_rijen, dichotoom, niet_dichotoom)
+      browser()
       # Step 2: Count tests per subset
-      n_sign_tests_per_subset = sign_tests_actual %>%
-        group_by(subset, subset.val) %>%
-        summarize(n_sign_tests = n(), .groups = 'drop')
-
-      # Step 3: Apply multiple testing correction per subset
-      mtc_per_subset = n_sign_tests_per_subset %>%
-        rowwise() %>%
-        mutate(
-          corrected_alpha = {
-            n_sign_tests = n_sign_tests
-            corrected_alpha = algemeen$confidence_level
-            
-            if ("multiple_testing_correction" %in% colnames(algemeen) && !is.na(algemeen$multiple_testing_correction)) {
-              if (grepl("bh|benjamini|hochberg", algemeen$multiple_testing_correction, ignore.case = TRUE)) {
-                pvals = sort(sign_tests_actual %>% filter(subset == cur_data()$subset, subset.val == cur_data()$subset.val) %>% pull(sign))
-                if (length(pvals) > 0) {
-                  bh.table = matrix(nrow = length(pvals), ncol = 3)
-                  bh.table[,1] = pvals
-                  bh.table[,2] = (1:n_sign_tests)[1:length(pvals)]
-                  bh.table[,3] = (bh.table[,2]/n_sign_tests) * algemeen$confidence_level
-                  if (sum(bh.table[,1] < bh.table[,3]) < 1) {
-                    corrected_alpha = 1e-20
-                  } else {
-                    corrected_alpha = max(bh.table[bh.table[,1] < bh.table[,3],1])
-                  }
-                } else {
-                  corrected_alpha = 1e-20
-                }
-              } else if (grepl("bf|bonferonni|bonferroni", algemeen$multiple_testing_correction, ignore.case = TRUE)) {
-                corrected_alpha = algemeen$confidence_level / n_sign_tests
+      n_sign_tests_per_subset = n_sign_tests %>%
+          group_by(subset, subset.val) %>%
+          summarize(n_sign_tests = sum(n_sign_tests), .groups = 'drop')
+      
+      # MTC berekenen per subset
+      mtc_method <- algemeen$multiple_testing_correction
+      base_alpha <- algemeen$confidence_level
+      
+      if (grepl("bf|bonferonni|bonferroni", mtc_method, ignore.case = TRUE)) {
+        
+        mtc_per_subset <- n_sign_tests_per_subset |>
+          mutate(
+            corrected_alpha = ifelse(n_sign_tests > 0, base_alpha / n_sign_tests, base_alpha)
+          )
+        
+      } else if (grepl("bh|benjamini|hochberg", mtc_method, ignore.case = TRUE)) {
+        
+        # BH heeft de daadwerkelijke p-waardes nodig
+        mtc_per_subset <- n_sign_tests_per_subset |>
+          rowwise() |>
+          mutate(
+            corrected_alpha = {
+              # Haal p-waardes op voor deze subset
+              pvals <- results |>
+                filter(
+                  (is.na(subset) & is.na(.env$subset)) | (!is.na(subset) & subset == .env$subset),
+                  (is.na(subset.val) & is.na(.env$subset.val)) | (!is.na(subset.val) & subset.val == .env$subset.val),
+                  !is.na(sign)
+                ) |>
+                pull(sign) |>
+                sort()
+              
+              if (length(pvals) > 0 && n_sign_tests > 0) {
+                ranks <- seq_along(pvals)
+                thresholds <- (ranks / n_sign_tests) * base_alpha
+                significant <- which(pvals <= thresholds)
+                if (length(significant) > 0) max(pvals[significant]) else 1e-20
+              } else {
+                1e-20
               }
             }
-            corrected_alpha
-          }
-        ) %>%
-        ungroup() %>%
-        select(subset, subset.val, corrected_alpha, n_sign_tests)
-
-      # Step 4: Message and fallback
-      if ("aantal_toetsen" %in% colnames(algemeen) && !is.na(algemeen$aantal_toetsen)) {
-        msg("Let op! Het aantal toetsen voor de multiple testing correction is vanuit de configuratie omgezet naar %d. Als dit niet de bedoeling is, pas dan de configuratie aan.", algemeen$aantal_toetsen, level=WARN)
+          ) |>
+          ungroup()
+        
+      } else {
+        msg("Onbekende multiple testing correctie methode: %s. Geen correctie toegepast.", mtc_method, level = WARN)
+        mtc_per_subset <- n_sign_tests_per_subset |>
+          mutate(corrected_alpha = base_alpha)
       }
-      msg("Multiple Testing Correctie (%s) is berekend PER SUBSET.", algemeen$multiple_testing_correction, level=MSG)
-
-      # Fallback for no correction
+      
+      msg("Multiple Testing Correctie (%s) is berekend per subset.", mtc_method, level = MSG)
+      
     } else {
-      mtc_per_subset = data.frame(subset=character(), subset.val=numeric(), corrected_alpha=numeric(), n_sign_tests=numeric())
+      mtc_per_subset <- data.frame(subset = character(), subset.val = numeric(), corrected_alpha = numeric(), n_sign_tests = numeric())
     }
     
-    # resultaten opslaan voor hergebruik
-    write.csv(varlist, sprintf("resultaten_csv/vars_%s.csv", basename(config.file)), fileEncoding="UTF-8", row.names=F)
-    write.csv(var_labels, sprintf("resultaten_csv/varlabels_%s.csv", basename(config.file)), fileEncoding="UTF-8", row.names=F)
-    write.csv(kolom_opbouw, sprintf("resultaten_csv/settings_%s.csv", basename(config.file)), fileEncoding="UTF-8", row.names=F)
-    write.csv(results, sprintf("resultaten_csv/results_%s.csv", basename(config.file)), fileEncoding="UTF-8", row.names=F)
-    write.csv(fpc_data, sprintf("resultaten_csv/fpc_%s.csv", basename(config.file)), fileEncoding="UTF-8", row.names=F)
-    write.csv(mtc_per_subset, sprintf("resultaten_csv/alphas_%s.csv", basename(config.file)), fileEncoding="UTF-8", row.names=F)
+  # resultaten opslaan voor hergebruik
+  write.csv(varlist, sprintf("resultaten_csv/vars_%s.csv", basename(config.file)), fileEncoding="UTF-8", row.names=F)
+  write.csv(var_labels, sprintf("resultaten_csv/varlabels_%s.csv", basename(config.file)), fileEncoding="UTF-8", row.names=F)
+  write.csv(kolom_opbouw, sprintf("resultaten_csv/settings_%s.csv", basename(config.file)), fileEncoding="UTF-8", row.names=F)
+  write.csv(results, sprintf("resultaten_csv/results_%s.csv", basename(config.file)), fileEncoding="UTF-8", row.names=F)
+  write.csv(fpc_data, sprintf("resultaten_csv/fpc_%s.csv", basename(config.file)), fileEncoding="UTF-8", row.names=F)
+  write.csv(mtc_per_subset, sprintf("resultaten_csv/alphas_%s.csv", basename(config.file)), fileEncoding="UTF-8", row.names=F)
   }
   
   
@@ -1188,7 +1249,7 @@ log.save = T
   
   ##### begin wegschrijven tabellenboeken
   basefilename = coalesce(opmaak$waarde[opmaak$type == "naam_tabellenboek"], "Overzicht")
-
+  
   # controleren of de gewenste logo's bestaan - anders kunnen de HTML- en Excel-functies ze niet openen
   if (nrow(logos) > 0) {
     for (i in 1:nrow(logos)) {
@@ -1254,5 +1315,5 @@ log.save = T
       MakeExcel(results, var_labels, kolom_opbouw, colnames(subsetmatches)[1], subsetvals[s], subsetmatches, n_resp, filename=paste0(basefilename, " ", names(subsetvals[s])))
     }
   }
-}
+    }
 
