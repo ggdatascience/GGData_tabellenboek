@@ -355,36 +355,38 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
         if (!is.null(algemeen$weergave) && algemeen$weergave == "n")
           output[vals,j] = data.var$n[data.var$col.index == j & data.var$val %in% rownames(output)]
         
-        # waarden onder de afkapgrens vervangen
-        output[which(output[,j] == 0), j] = A_EXACTZERO
-        output[which(output[,j] <= algemeen$afkapwaarde_antwoord & output[,j] > 0) ,j] = A_TOOSMALL
-        
-        #PS:
-        #Metingen die o.b.v te lage aantallen zijn vervangen
-        # n_question is vooraf berekend in tbl_maken.R (vraag-niveau n per kolomgroep)
-        n_q_vals <- data.var$n_question[data.var$col.index == j]
-        n_q <- if (length(n_q_vals) > 0) n_q_vals[1] else 0
-
-        if (!is.na(indeling_rijen$verberg_crossings[i]) && !is.na(col.design$crossing[j])) {
-          output[,j] = Q_MISSING
-        } else if (n_q == 0) {
-          output[,j] = Q_MISSING
-        } else if (n_q < algemeen$min_observaties_per_vraag) {
-          #Alle percentages wegstrepen als aantallen per groep te klein zijn.
-          output[,j] <- Q_TOOSMALL
-        } else if(any(data.var$n.unweighted[data.var$col.index == j] < algemeen$min_observaties_per_antwoord, na.rm=T)) {
-          # Bij een cel met te weinig antwoorden zijn er twee opties:
-          # 1) De hele kolom verbergen, om herleidbaarheid te voorkomen.
-          # 2) Alleen die cel verbergen.
-          # De keuze hierin is discutabel, dus we laten het over aan de onderzoekers zelf.
-          if (algemeen$vraag_verbergen_bij_missend_antwoord) {
-            #Alle percentages wegstrepen als tenminste 1 van de aantallen per antwoord te klein is.
-            output[,j] <- A_TOOSMALL
+        # onderdrukking toepassen
+        # als de suppression-kolom beschikbaar is (nieuwe cache), gebruik die; anders de oude logica (backwards compatible)
+        if ("suppression" %in% colnames(data.var)) {
+          # nieuwe methode: suppression vooraf berekend in tbl_maken.R
+          data.col = data.var[data.var$col.index == j & data.var$val %in% rownames(output), ]
+          for (v in data.col$val) {
+            sup = data.col$suppression[data.col$val == v]
+            if (length(sup) > 0 && sup != 0) {
+              output[as.character(v), j] = sup
+            }
           }
-          else {
-            # alleen de cel wegstrepen
-            data.col = data.var[data.var$col.index == j & data.var$val %in% rownames(output),]
-            output[rownames(output) %in% data.col$val[which(data.col$n.unweighted < algemeen$min_observaties_per_antwoord)],j] <- A_TOOSMALL
+        } else {
+          # oude methode: onderdrukking hier berekenen (backwards compatible met cache zonder suppression)
+          n_q_vals <- data.var$n_question[data.var$col.index == j]
+          n_q <- if (length(n_q_vals) > 0) n_q_vals[1] else 0
+          
+          output[which(output[,j] == 0), j] = A_EXACTZERO
+          output[which(output[,j] <= algemeen$afkapwaarde_antwoord & output[,j] > 0), j] = A_TOOSMALL
+          
+          if (!is.na(indeling_rijen$verberg_crossings[i]) && !is.na(col.design$crossing[j])) {
+            output[,j] = Q_MISSING
+          } else if (n_q == 0) {
+            output[,j] = Q_MISSING
+          } else if (n_q < algemeen$min_observaties_per_vraag) {
+            output[,j] <- Q_TOOSMALL
+          } else if (any(data.var$n.unweighted[data.var$col.index == j] < algemeen$min_observaties_per_antwoord, na.rm=T)) {
+            if (algemeen$vraag_verbergen_bij_missend_antwoord) {
+              output[,j] <- A_TOOSMALL
+            } else {
+              data.col = data.var[data.var$col.index == j & data.var$val %in% rownames(output),]
+              output[rownames(output) %in% data.col$val[which(data.col$n.unweighted < algemeen$min_observaties_per_antwoord)],j] <- A_TOOSMALL
+            }
           }
         }
         
