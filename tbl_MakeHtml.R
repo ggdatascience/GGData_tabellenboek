@@ -487,7 +487,7 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
           if (col.design$subset[j] != subset) {
             subset.col = subsetmatches[subsetmatches[,1] == subset.val, col.design$subset[j]]
           }
-          cols = c("val", "crossing", "crossing.val", "sign", "sign.vs", "n.unweighted", "n_question", "perc.weighted", "display_include", "is_dichotoom")
+          cols = c("var", "val", "crossing", "crossing.val", "sign", "sign.vs", "n.unweighted", "n_question", "perc.weighted", "suppression", "display_include", "is_dichotoom")
           cols = cols[cols %in% colnames(results)]
           data.tmp = results[which(NA.identical(results$dataset, col.design$dataset[j]) & NA.identical(results$subset, col.design$subset[j]) &
                                      NA.identical(results$subset.val, subset.col) &
@@ -498,9 +498,8 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
           if (nrow(data.tmp) == 0) next
           data.tmp$col.index = col.design$col.index[j]
           data.var = bind_rows(data.var, data.tmp)
-        }
-        else {
-          cols = c("val", "crossing", "crossing.val", "sign", "sign.vs", "n.unweighted", "n_question", "perc.weighted", "display_include", "is_dichotoom")
+        } else {
+          cols = c("var", "val", "crossing", "crossing.val", "sign", "sign.vs", "n.unweighted", "n_question", "perc.weighted", "suppression", "display_include", "is_dichotoom")
           cols = cols[cols %in% colnames(results)]
           data.tmp = results[which(NA.identical(results$dataset, col.design$dataset[j]) & NA.identical(results$subset, col.design$subset[j]) &
                                      is.na(results$subset.val) &

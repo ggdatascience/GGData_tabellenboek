@@ -952,19 +952,22 @@ log.save = T
             ungroup() %>%
             mutate(
               suppression = case_when(
-                verberg_crossings & !is.na(crossing)                               ~ -3L, # Q_MISSING
-                all_na                                                             ~ -3L, # Q_MISSING
-                n_question == 0                                                    ~ -3L, # Q_MISSING
-                n_question < algemeen$min_observaties_per_vraag                    ~ -2L, # Q_TOOSMALL
-                any_answer_toosmall & algemeen$vraag_verbergen_bij_missend_antwoord ~ -1L, # A_TOOSMALL
-                n.unweighted < algemeen$min_observaties_per_antwoord               ~ -1L, # A_TOOSMALL
-                perc.weighted == 0                                                 ~ -4L, # A_EXACTZERO
-                perc.weighted <= algemeen$afkapwaarde_antwoord & perc.weighted > 0 ~ -1L, # A_TOOSMALL
-                TRUE                                                               ~ 0L
+                verberg_crossings & !is.na(crossing)                                      ~ -3L, # Q_MISSING
+                all_na                                                                    ~ -3L, # Q_MISSING
+                n_question == 0                                                           ~ -3L, # Q_MISSING
+                n_question < algemeen$min_observaties_per_vraag                           ~ -2L, # Q_TOOSMALL
+                perc.weighted == 0                                                        ~ -4L, # A_EXACTZERO
+                any_answer_toosmall & algemeen$vraag_verbergen_bij_missend_antwoord       ~ -1L, # A_TOOSMALL
+                n.unweighted < algemeen$min_observaties_per_antwoord                      ~ -1L, # A_TOOSMALL
+                perc.weighted <= algemeen$afkapwaarde_antwoord & perc.weighted > 0        ~ -1L, # A_TOOSMALL
+                TRUE                                                                      ~ 0L
               )
             ) %>%
             group_by(var, dataset, subset, subset.val, year, crossing, crossing.val, sign.vs) %>%
-            mutate(var_suppressed = all(suppression != 0)) %>%
+            mutate(
+              # A_EXACTZERO (-4) telt niet mee als onderdrukking voor var_suppressed
+              var_suppressed = all(suppression != 0 & suppression != -4L)
+            ) %>%
             ungroup() %>%
             select(-all_na, -any_answer_toosmall, -verberg_crossings)
         }
@@ -1207,21 +1210,13 @@ log.save = T
     results <- results %>%
       left_join(verberg_crossings_lookup, by = c("var" = "inhoud")) %>%
       mutate(verberg_crossings = coalesce(verberg_crossings, FALSE)) %>%
-      group_by(
-        var,
-        dataset,
-        subset,
-        subset.val,
-        year,
-        crossing,
-        crossing.val,
-        sign.vs
-      ) %>%
+      group_by(var, dataset, subset, subset.val, year, crossing, crossing.val, sign.vs) %>%
       mutate(
         n_question = sum(n.unweighted, na.rm = TRUE),
         all_na = all(is.na(perc.weighted)),
+        # Exact nul (n=0) telt niet mee als 'te klein antwoord'; die krijgen A_EXACTZERO
         any_answer_toosmall = any(
-          n.unweighted < algemeen$min_observaties_per_antwoord,
+          n.unweighted > 0 & n.unweighted < algemeen$min_observaties_per_antwoord,
           na.rm = TRUE
         )
       ) %>%
@@ -1230,38 +1225,29 @@ log.save = T
         # Onderdrukking toepassen volgens alle regels uit de Excel/HTML export
         suppression = case_when(
           # Kolomniveau: verberg_crossings is gezet en dit is een crossing-kolom
-          verberg_crossings & !is.na(crossing) ~ -3L, # Q_MISSING
+          verberg_crossings & !is.na(crossing)                                      ~ -3L, # Q_MISSING
           # Kolomniveau: alle waarden zijn NA
-          all_na ~ -3L, # Q_MISSING
+          all_na                                                                    ~ -3L, # Q_MISSING
           # Kolomniveau: geen respondenten
-          n_question == 0 ~ -3L, # Q_MISSING
+          n_question == 0                                                           ~ -3L, # Q_MISSING
           # Kolomniveau: te weinig respondenten voor de hele vraag
-          n_question < algemeen$min_observaties_per_vraag ~ -2L, # Q_TOOSMALL
+          n_question < algemeen$min_observaties_per_vraag                           ~ -2L, # Q_TOOSMALL
+          # Cel-niveau: exact nul (vóór de n.unweighted check, want n=0 impliceert perc=0)
+          perc.weighted == 0                                                        ~ -4L, # A_EXACTZERO
           # Kolomniveau: een antwoord te klein én config zegt hele vraag onderdrukken
-          any_answer_toosmall &
-            algemeen$vraag_verbergen_bij_missend_antwoord ~ -1L, # A_TOOSMALL
+          any_answer_toosmall & algemeen$vraag_verbergen_bij_missend_antwoord       ~ -1L, # A_TOOSMALL
           # Cel-niveau: dit specifieke antwoord te weinig respondenten
-          n.unweighted < algemeen$min_observaties_per_antwoord ~ -1L, # A_TOOSMALL
-          # Cel-niveau: exact nul
-          perc.weighted == 0 ~ -4L, # A_EXACTZERO
+          n.unweighted < algemeen$min_observaties_per_antwoord                      ~ -1L, # A_TOOSMALL
           # Cel-niveau: onder de afkapwaarde
-          perc.weighted <= algemeen$afkapwaarde_antwoord &
-            perc.weighted > 0 ~ -1L, # A_TOOSMALL
-          TRUE ~ 0L
+          perc.weighted <= algemeen$afkapwaarde_antwoord & perc.weighted > 0        ~ -1L, # A_TOOSMALL
+          TRUE                                                                      ~ 0L
         )
       ) %>%
-      # Variabele-niveau: is de hele variabele onderdrukt voor deze kolomgroep?
-      group_by(
-        var,
-        dataset,
-        subset,
-        subset.val,
-        year,
-        crossing,
-        crossing.val,
-        sign.vs
+      group_by(var, dataset, subset, subset.val, year, crossing, crossing.val, sign.vs) %>%
+      mutate(
+        # A_EXACTZERO (-4) telt niet mee als onderdrukking voor var_suppressed
+        var_suppressed = all(suppression != 0 & suppression != -4L)
       ) %>%
-      mutate(var_suppressed = all(suppression != 0)) %>%
       ungroup() %>%
       select(-all_na, -any_answer_toosmall, -verberg_crossings)
 
@@ -1546,5 +1532,5 @@ log.save = T
       MakeExcel(results, var_labels, kolom_opbouw, colnames(subsetmatches)[1], subsetvals[s], subsetmatches, n_resp, filename=paste0(basefilename, " ", names(subsetvals[s])))
     }
   }
-    }
+}
 
