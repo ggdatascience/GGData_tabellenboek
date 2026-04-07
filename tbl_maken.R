@@ -1359,7 +1359,7 @@ log.save = T
         summarize(n_sign_tests = sum(n_sign_tests), .groups = 'drop')
       
       # Stap 2: Tel testen op totaal kolommen erbij op
-      n_sign_tests_per_subset %>% 
+      n_sign_tests_per_subset <- n_sign_tests_per_subset %>% 
         mutate(
           n_sign_tests = n_sign_tests + n_total_sign_tests
         )
