@@ -1307,11 +1307,20 @@ log.save = T
           select(inhoud, waardes, verberg_crossings) %>%
           mutate(verberg_crossings = !is.na(verberg_crossings))
 
-        crossings_toetsen_tibble <- tibble(
-          crossing = names(crossings_toetsen),
-          crossings_toetsen = unname(crossings_toetsen)
-        )
-
+        
+        if(length(crossings_toetsen) > 0){
+          crossings_toetsen_tibble <- tibble(
+            crossing = names(crossings_toetsen),
+            crossings_toetsen = unname(crossings_toetsen)
+          )
+        } else {
+          crossings_toetsen_tibble <- tibble(
+            crossing = NA,
+            crossings_toetsen = NA
+          )
+        }
+        
+        
         levels_expanded %>%
           left_join(indeling_rijen_vars, by = join_by(var == inhoud)) %>%
           left_join(crossings_toetsen_tibble, by = join_by(crossing)) %>%
@@ -1331,6 +1340,8 @@ log.save = T
       # Stap 1: Identificeer de daadwerkelijk uitgevoerde tests per subset
       # - Voor dichotome variabelen: tel slechts één test per variabele per crossing
       # - Voor andere variabelen: tel unieke (var, crossing, antwoord) combinaties
+      # - Tel de testen op totaalkolommen op basis van kolom_opbouw
+      
       n_sign_tests <- count_tests(
         results,
         algemeen,
@@ -1340,11 +1351,19 @@ log.save = T
         niet_dichotoom
       )
       
+      n_total_sign_tests <- sum(!is.na(kolom_opbouw$test.col))
+      
       # Stap 2: Tel tests per subset
       n_sign_tests_per_subset = n_sign_tests %>%
         group_by(subset, subset.val) %>%
         summarize(n_sign_tests = sum(n_sign_tests), .groups = 'drop')
-
+      
+      # Stap 2: Tel testen op totaal kolommen erbij op
+      n_sign_tests_per_subset %>% 
+        mutate(
+          n_sign_tests = n_sign_tests + n_total_sign_tests
+        )
+      
       # MTC berekenen per subset
       mtc_method <- algemeen$multiple_testing_correction
       base_alpha <- algemeen$confidence_level
