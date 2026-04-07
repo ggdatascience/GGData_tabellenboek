@@ -969,6 +969,10 @@ log.save = T
               var_suppressed = all(suppression != 0 & suppression != -4L)
             ) %>%
             ungroup() %>%
+            mutate(
+              # A_EXACTZERO (-4) telt niet mee als onderdrukking voor var_suppressed
+              var_suppressed = case_when(suppression != 0 & suppression != -4L ~ TRUE,
+                                         .default = var_suppressed)) |> 
             select(-all_na, -any_answer_toosmall, -verberg_crossings)
         }
         
@@ -1249,6 +1253,10 @@ log.save = T
         var_suppressed = all(suppression != 0 & suppression != -4L)
       ) %>%
       ungroup() %>%
+      mutate(
+        # A_EXACTZERO (-4) telt niet mee als onderdrukking voor var_suppressed
+        var_suppressed = case_when(suppression != 0 & suppression != -4L ~ TRUE,
+        .default = var_suppressed)) |> 
       select(-all_na, -any_answer_toosmall, -verberg_crossings)
 
     # MTC
@@ -1261,7 +1269,6 @@ log.save = T
       # - Voor dichotome variabelen: tel slechts één test per variabele per crossing
       # - Voor andere variabelen: tel unieke (var, crossing, antwoord) combinaties
       # - Tel de testen op totaalkolommen op basis van kolom_opbouw
-      
       n_sign_tests <- count_tests(
         results,
         algemeen,

@@ -192,6 +192,7 @@ count_tests <- function(
       crossings_toetsen = unname(crossings_toetsen)
     )
   } else {
+    # Lege tibble maken om errors te voorkomen bij left_join als crossings_toetsen leeg is
     crossings_toetsen_tibble <- tibble(
       crossing = NA,
       crossings_toetsen = NA
