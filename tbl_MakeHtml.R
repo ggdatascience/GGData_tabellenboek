@@ -118,7 +118,10 @@ BuildHtmlTableRows = function (input, col.design, n=F) {
       val = input[i, c+2]
       htmlclass = c()
       
-      if (val == A_TOOSMALL) {
+      if (val == A_EXACTZERO) {
+        val = sprintf("%s%s", ifelse(n, "n=", ""), "0")
+        htmlclass = c(htmlclass, "antwoord_exact_nul")
+      } else if (val == A_TOOSMALL) {
         val = algemeen$tekst_min_antwoord_niet_gehaald
         htmlclass = c(htmlclass, "antwoord_niet_gehaald")
       } else if (val == Q_TOOSMALL) {
@@ -127,9 +130,6 @@ BuildHtmlTableRows = function (input, col.design, n=F) {
       } else if (val == Q_MISSING) {
         val = algemeen$tekst_missende_data
         htmlclass = c(htmlclass, "data_missend")
-      } else if (val == A_EXACTZERO) {
-        val = sprintf("%s%s", ifelse(n, "n=", ""), "0")
-        htmlclass = c(htmlclass, "antwoord_exact_nul")
       } else {
         val = sprintf("%s%.0f", ifelse(n, "n=", ""), val)
       } 
