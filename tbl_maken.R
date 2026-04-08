@@ -927,53 +927,9 @@ log.save = T
           results = add_dichotoom_flags(results, dichotoom, niet_dichotoom, algemeen)
         }
 
-        # n_question (aantal respondenten per vraag) toevoegen indien afwezig (backwards compatible met oudere cache)
-        if (!"n_question" %in% colnames(results)) {
-          results <- results %>%
-            group_by(var, dataset, subset, subset.val, year, crossing, crossing.val, sign.vs) %>%
-            mutate(n_question = sum(n.unweighted, na.rm = TRUE)) %>%
-            ungroup()
-        }
-
-        if (!"suppression" %in% colnames(results)) {
-          verberg_crossings_lookup <- indeling_rijen %>%
-            filter(type == "var") %>%
-            select(inhoud, verberg_crossings) %>%
-            mutate(verberg_crossings = !is.na(verberg_crossings))
-
-          results <- results %>%
-            left_join(verberg_crossings_lookup, by = c("var" = "inhoud")) %>%
-            mutate(verberg_crossings = coalesce(verberg_crossings, FALSE)) %>%
-            group_by(var, dataset, subset, subset.val, year, crossing, crossing.val, sign.vs) %>%
-            mutate(
-              all_na = all(is.na(perc.weighted)),
-              any_answer_toosmall = any(n.unweighted < algemeen$min_observaties_per_antwoord, na.rm = TRUE)
-            ) %>%
-            ungroup() %>%
-            mutate(
-              suppression = case_when(
-                verberg_crossings & !is.na(crossing)                                      ~ -3L, # Q_MISSING
-                all_na                                                                    ~ -3L, # Q_MISSING
-                n_question == 0                                                           ~ -3L, # Q_MISSING
-                n_question < algemeen$min_observaties_per_vraag                           ~ -2L, # Q_TOOSMALL
-                perc.weighted == 0                                                        ~ -4L, # A_EXACTZERO
-                any_answer_toosmall & algemeen$vraag_verbergen_bij_missend_antwoord       ~ -1L, # A_TOOSMALL
-                n.unweighted < algemeen$min_observaties_per_antwoord                      ~ -1L, # A_TOOSMALL
-                perc.weighted <= algemeen$afkapwaarde_antwoord & perc.weighted > 0        ~ -1L, # A_TOOSMALL
-                TRUE                                                                      ~ 0L
-              )
-            ) %>%
-            group_by(var, dataset, subset, subset.val, year, crossing, crossing.val, sign.vs) %>%
-            mutate(
-              # A_EXACTZERO (-4) telt niet mee als onderdrukking voor var_suppressed
-              var_suppressed = all(suppression != 0 & suppression != -4L)
-            ) %>%
-            ungroup() %>%
-            mutate(
-              # A_EXACTZERO (-4) telt niet mee als onderdrukking voor var_suppressed
-              var_suppressed = case_when(suppression != 0 & suppression != -4L ~ TRUE,
-                                         .default = var_suppressed)) |> 
-            select(-all_na, -any_answer_toosmall, -verberg_crossings)
+        # Onderdrukkingsvlaggen toevoegen indien afwezig (backwards compatible met oudere cache)
+        if (!"n_question" %in% colnames(results) || !"suppression" %in% colnames(results)) {
+          results <- add_suppression_flags(results, algemeen, indeling_rijen)
         }
         
         # Backwards compatible check voor opgeslagen alpha 
@@ -1202,62 +1158,9 @@ log.save = T
     results = results %>% distinct()
 
     
-    # Bereken vraag-niveau n per kolomgroep (som van n.unweighted over alle antwoordcategorieën)
-    # en bereken of een vraag of antwoordcategorie onderdrukt moet worden op basis van de configuratie (min_observaties_per_vraag, min_observaties_per_antwoord, afkapwaarde_antwoord)
-    # Dit is nodig voor MTC (onderdrukte variabelen uitsluiten) en wordt hergebruikt in tbl_MakeExcel/tbl_MakeHtml
-    # verberg_crossings ophalen uit indeling_rijen
-    verberg_crossings_lookup <- indeling_rijen %>%
-      filter(type == "var") %>%
-      select(inhoud, verberg_crossings) %>%
-      mutate(verberg_crossings = !is.na(verberg_crossings))
-
-    results <- results %>%
-      left_join(verberg_crossings_lookup, by = c("var" = "inhoud")) %>%
-      mutate(verberg_crossings = coalesce(verberg_crossings, FALSE)) %>%
-      group_by(var, dataset, subset, subset.val, year, crossing, crossing.val, sign.vs) %>%
-      mutate(
-        n_question = sum(n.unweighted, na.rm = TRUE),
-        all_na = all(is.na(perc.weighted)),
-        # Exact nul (n=0) telt niet mee als 'te klein antwoord'; die krijgen A_EXACTZERO
-        any_answer_toosmall = any(
-          n.unweighted > 0 & n.unweighted < algemeen$min_observaties_per_antwoord,
-          na.rm = TRUE
-        )
-      ) %>%
-      ungroup() %>%
-      mutate(
-        # Onderdrukking toepassen volgens alle regels uit de Excel/HTML export
-        suppression = case_when(
-          # Kolomniveau: verberg_crossings is gezet en dit is een crossing-kolom
-          verberg_crossings & !is.na(crossing)                                      ~ -3L, # Q_MISSING
-          # Kolomniveau: alle waarden zijn NA
-          all_na                                                                    ~ -3L, # Q_MISSING
-          # Kolomniveau: geen respondenten
-          n_question == 0                                                           ~ -3L, # Q_MISSING
-          # Kolomniveau: te weinig respondenten voor de hele vraag
-          n_question < algemeen$min_observaties_per_vraag                           ~ -2L, # Q_TOOSMALL
-          # Cel-niveau: exact nul (vóór de n.unweighted check, want n=0 impliceert perc=0)
-          perc.weighted == 0                                                        ~ -4L, # A_EXACTZERO
-          # Kolomniveau: een antwoord te klein én config zegt hele vraag onderdrukken
-          any_answer_toosmall & algemeen$vraag_verbergen_bij_missend_antwoord       ~ -1L, # A_TOOSMALL
-          # Cel-niveau: dit specifieke antwoord te weinig respondenten
-          n.unweighted < algemeen$min_observaties_per_antwoord                      ~ -1L, # A_TOOSMALL
-          # Cel-niveau: onder de afkapwaarde
-          perc.weighted <= algemeen$afkapwaarde_antwoord & perc.weighted > 0        ~ -1L, # A_TOOSMALL
-          TRUE                                                                      ~ 0L
-        )
-      ) %>%
-      group_by(var, dataset, subset, subset.val, year, crossing, crossing.val, sign.vs) %>%
-      mutate(
-        # A_EXACTZERO (-4) telt niet mee als onderdrukking voor var_suppressed
-        var_suppressed = all(suppression != 0 & suppression != -4L)
-      ) %>%
-      ungroup() %>%
-      mutate(
-        # A_EXACTZERO (-4) telt niet mee als onderdrukking voor var_suppressed
-        var_suppressed = case_when(suppression != 0 & suppression != -4L ~ TRUE,
-        .default = var_suppressed)) |> 
-      select(-all_na, -any_answer_toosmall, -verberg_crossings)
+    # Bereken onderdrukkingsvlaggen (n_question, suppression, var_suppressed)
+    # Dit is nodig voor MTC en wordt hergebruikt in tbl_MakeExcel/tbl_MakeHtml
+    results <- add_suppression_flags(results, algemeen, indeling_rijen)
 
     # MTC
     if (
@@ -1278,18 +1181,11 @@ log.save = T
         niet_dichotoom
       )
       
-      n_total_sign_tests <- sum(!is.na(kolom_opbouw$test.col))
-      
-      # Stap 2: Tel tests per subset
+     # Stap 2: Tel tests per subset
       n_sign_tests_per_subset = n_sign_tests %>%
         group_by(subset, subset.val) %>%
         summarize(n_sign_tests = sum(n_sign_tests), .groups = 'drop')
-      
-      # Stap 2: Tel testen op totaal kolommen erbij op
-      n_sign_tests_per_subset <- n_sign_tests_per_subset %>% 
-        mutate(
-          n_sign_tests = n_sign_tests + n_total_sign_tests
-        )
+
       
       # MTC berekenen per subset
       mtc_method <- algemeen$multiple_testing_correction
