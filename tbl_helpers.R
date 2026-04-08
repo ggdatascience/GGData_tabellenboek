@@ -156,8 +156,9 @@ count_tests <- function(
     filter(!is.na(val)) %>%
     # Onderdrukte variabelen uitsluiten op basis van voorberekende var_suppressed
     filter(!var_suppressed) %>%
-    group_by(subset, subset.val, var, crossing) %>%
+    group_by(dataset, subset, subset.val, var, crossing) %>%
     filter(!all(is.na(sign.vs))) %>%
+    filter(!(is.na(sign))) %>%
     summarize(
       levels = list(sort(unique(suppressWarnings(as.numeric(val))))),
       .groups = "drop"
