@@ -182,6 +182,14 @@ log.save = T
     onderdelen$kolomnaam = NA
   }
   
+  # mogelijkheid om totaalkolommen anders te wegen dan crossingkolommen
+  if (!"weegfactor_totaal" %in% colnames(onderdelen)) {
+    onderdelen$weegfactor_totaal = NA
+  }
+  if (!"stratum_totaal" %in% colnames(onderdelen)) {
+    onderdelen$stratum_totaal = NA
+  }
+  
   # idem voor id bij logos - nrow() is nodig omdat logos$id = NA bij 0 rijen een foutmelding geeft
   if (!"id" %in% colnames(logos) && nrow(logos) > 0) {
     logos$id = NA
@@ -229,7 +237,7 @@ log.save = T
   } else{
     msg("Geen kloppend tabblad crossings. Deze moet bestaan uit één of twee kolommen; crossings en (optioneel) toetsen. Standaard is 'crossings' in cel A1 en verder een lege sheet. Voor meer informatie zie documentatie.", level=ERR)
   }
-
+  
   if (any(crossings %in% onderdelen$subset)) {
     msg("De variabele(n) %s is/zijn ingevuld als crossing en subset. Een subset kan niet met zichzelf gekruist worden.",
         str_c(crossings[crossings %in% onderdelen$subset], ", "), level=WARN)
@@ -552,11 +560,11 @@ log.save = T
         rename(stratum = strata)
       if(file.exists(datasets$fpc[d])){
         # als het een pad is: zoek de fpc data op en berekenen sampling prob per stratum
-          fpc_data <- fpc_data %>% left_join(
-            read.xlsx(datasets$fpc[d]) %>% 
-              mutate(stratum = as.factor(stratum)),
-            join_by(stratum == stratum)
-          ) %>% 
+        fpc_data <- fpc_data %>% left_join(
+          read.xlsx(datasets$fpc[d]) %>% 
+            mutate(stratum = as.factor(stratum)),
+          join_by(stratum == stratum)
+        ) %>% 
           mutate(fpc = populatiegrootte)
       } else if(grepl("GROOTGEWICHT_", datasets$fpc[d])){
         if(is.na(datasets$stratum[d])){stop("Bij FPC is het verplicht een stratum op te geven.")}
@@ -596,11 +604,11 @@ log.save = T
         msg("Er bevinden zich kleine strata in de data waarvoor de geschatte populatiegrootte kleiner is dan aantal respondenten. Er wordt nu aangenomen dat de populatiegrootte hier gelijk is aan aantal respondenten. Het gaat om:", level=MSG)
         fpc_per_respondent <- fpc_per_respondent %>% 
           mutate(
-          fpc = case_when(
-            fpc < Freq ~ Freq,
-            T ~ fpc
+            fpc = case_when(
+              fpc < Freq ~ Freq,
+              T ~ fpc
+            )
           )
-        )
         print(fpc_per_respondent[is_small_strata,])
       }
       
@@ -628,9 +636,15 @@ log.save = T
       msg("Er zijn %d missende weegfactoren gevonden. Volgens de configuratie dient er dan te worden gestopt met uitvoering.\nPas dit aan in de data of de configuratie.",
           n, level=ERR)
     } else if (algemeen$missing_weegfactoren == "verwijderen") {
-      msg("Er zijn %d missende weegfactoren gevonden. Deze rijen zijn verwijderd uit de dataset, zoals aangegeven in de configuratie.",
-          n, level=MSG)
-      data = data[-which(is.na(data$superweegfactor)),]
+      has.alt.total.weight = "weegfactor_totaal" %in% colnames(onderdelen) && any(!is.na(onderdelen$weegfactor_totaal))
+      if (has.alt.total.weight) {
+        msg("Er zijn %d missende weegfactoren gevonden. Omdat weegfactor_totaal is ingesteld, worden deze rijen niet globaal verwijderd maar per design uitgesloten op basis van de gebruikte weegfactor.",
+            n, level=MSG)
+      } else {
+        msg("Er zijn %d missende weegfactoren gevonden. Deze rijen zijn verwijderd uit de dataset, zoals aangegeven in de configuratie.",
+            n, level=MSG)
+        data = data[-which(is.na(data$superweegfactor)),]
+      }
     } else if (str_detect(algemeen$missing_weegfactoren, "^\\d+")) {
       msg("Er zijn %d missende weegfactoren gevonden. Deze waarden zijn vervangen door %s, zoals aangegeven in de configuratie.",
           n, algemeen$missing_weegfactoren, level=MSG)
@@ -642,7 +656,7 @@ log.save = T
   }
   
   # zijn alle benodigde variabelen aanwezig?
-  required.vars = c(weight.factors, crossings, unique(onderdelen$subset))
+  required.vars = c(weight.factors, crossings, unique(onderdelen$subset), unique(onderdelen$weegfactor_totaal), unique(onderdelen$stratum_totaal))
   required.vars = required.vars[!is.na(required.vars)]
   if (!all(required.vars %in% colnames(data))) {
     msg("De variabele(n) %s komen niet voor in de dataset. Deze zijn in de configuratie opgegeven als weegfactor, crossing of subset, en daarmee verplicht. Pas de configuratie aan of voeg de variabele(n) toe aan de dataset.",
@@ -693,7 +707,8 @@ log.save = T
         kolom_opbouw = bind_rows(kolom_opbouw, data.frame(col.index=nrow(kolom_opbouw)+(1:n), dataset=rep(d, n),
                                                           subset=rep(onderdelen$subset[i], n), year=rep(onderdelen$jaar[i], n),
                                                           crossing=rep(crossing, n), crossing.val=as.numeric(crossing.labels$val),
-                                                          crossing.lab=crossing.labels$label, test.col=rep(test.col.current, n), test.display=T))
+                                                          crossing.lab=crossing.labels$label, test.col=rep(test.col.current, n), test.display=T,
+                                                          design.weegfactor=rep(NA, n), design.stratum=rep(NA, n), stringsAsFactors=F))
       }
     }
     
@@ -716,7 +731,7 @@ log.save = T
     
     kolom_opbouw = bind_rows(kolom_opbouw, data.frame(col.index=nrow(kolom_opbouw)+1, dataset=d, subset=onderdelen$subset[i], year=onderdelen$jaar[i],
                                                       crossing=NA, crossing.val=NA, crossing.lab=NA, test.col=test.col, test.display=!onderdelen$sign_doelkolom[i],
-                                                      name=onderdelen$kolomnaam[i]))
+                                                      name=onderdelen$kolomnaam[i], design.weegfactor=onderdelen$weegfactor_totaal[i], design.stratum=onderdelen$stratum_totaal[i], stringsAsFactors=F))
     
     kolom_opbouw$test.col[kolom_opbouw$test.col == -1] = nrow(kolom_opbouw)
   }
@@ -840,10 +855,16 @@ log.save = T
     varlist.cmp = varlist %>% select(inhoud, starts_with("weeg"))
     varlist.prev.cmp = varlist.prev %>% select(inhoud, starts_with("weeg"))
     
-    # sign_doelkolom en kolomnaam zijn nieuw; deze mogen missen
+    # sign_doelkolom, kolomnaam, design.weegfactor en design.stratum zijn nieuw; deze mogen missen
     # daarnaast mag crossing.lab anders zijn; deze kan in de configuratie aangepast zijn
-    kolom_opbouw.cmp = kolom_opbouw %>% select(col.index, dataset, subset, year, crossing, crossing.val, test.col)
-    kolom_opbouw.prev.cmp = kolom_opbouw.prev %>% select(col.index, dataset, subset, year, crossing, crossing.val, test.col)
+    kolom_opbouw.cmp = kolom_opbouw %>% select(col.index, dataset, subset, year, crossing, crossing.val, test.col, design.weegfactor, design.stratum)
+    if (!"design.weegfactor" %in% colnames(kolom_opbouw.prev)) {
+      kolom_opbouw.prev$design.weegfactor = NA
+    }
+    if (!"design.stratum" %in% colnames(kolom_opbouw.prev)) {
+      kolom_opbouw.prev$design.stratum = NA
+    }
+    kolom_opbouw.prev.cmp = kolom_opbouw.prev %>% select(col.index, dataset, subset, year, crossing, crossing.val, test.col, design.weegfactor, design.stratum)
     
     if (identical.enough(kolom_opbouw.cmp, kolom_opbouw.prev.cmp) && identical.enough(varlist.cmp, varlist.prev.cmp)) {
       if("forceer_berekening" %in% colnames(algemeen) && algemeen$forceer_berekening){
@@ -882,7 +903,7 @@ log.save = T
       # behalve [var], dummy._col[1:n], dummy.[var], de subsets en de crossings kunnen eruit
       vars = c(var, kolom_opbouw$crossing, kolom_opbouw$subset, colnames(data)[str_starts(colnames(data), "dummy._col")],
                colnames(data)[str_starts(colnames(data), paste0("dummy.", var))], "superstrata", "superweegfactor", "fpc",
-               "tbl_dataset", weight.factors)
+               "tbl_dataset", weight.factors, kolom_opbouw$design.weegfactor, kolom_opbouw$design.stratum)
       vars = unique(vars[!is.na(vars)])
       data.tmp = data %>% select(any_of(vars))
       
@@ -923,17 +944,83 @@ log.save = T
           }
         }
       }
-
+      
       # aanmaken van design, afhankelijk van of er fpc is.
+      data.default = data.tmp[!is.na(data.tmp$superweegfactor),]
+      if (nrow(data.default) <= 0) {
+        msg("Er blijven geen rijen over voor variabele %s na filtering op missende standaardweegfactor.", var, level=WARN)
+        next
+      }
       if("fpc" %in% colnames(datasets)){
-        design = svydesign(ids=~1, strata=~superstrata, weights=~superweegfactor, fpc=~fpc, data=data.tmp)  
+        design = svydesign(ids=~1, strata=~superstrata, weights=~superweegfactor, fpc=~fpc, data=data.default)  
       } else {
-        design = svydesign(ids=~1, strata=~superstrata, weights=~superweegfactor, data=data.tmp)
+        design = svydesign(ids=~1, strata=~superstrata, weights=~superweegfactor, data=data.default)
+      }
+      designs = list(default=design)
+      
+      # optioneel: alternatieve weging voor totaalkolommen (bijv. gemeentegewicht naast wijkcrossings)
+      if ("design.weegfactor" %in% colnames(kolom_opbouw)) {
+        alt.designs = kolom_opbouw %>%
+          filter(is.na(crossing) & !is.na(design.weegfactor)) %>%
+          distinct(dataset, design.weegfactor, design.stratum)
+        
+        if (nrow(alt.designs) > 0) {
+          for (k in 1:nrow(alt.designs)) {
+            alt.dataset = alt.designs$dataset[k]
+            alt.weight = alt.designs$design.weegfactor[k]
+            alt.stratum = alt.designs$design.stratum[k]
+            
+            if (!(alt.weight %in% colnames(data.tmp))) {
+              msg("Kolomopbouw gebruikt alternatieve weegfactor %s voor dataset %d, maar die variabele komt niet voor in de data.", alt.weight, alt.dataset, level=ERR)
+            }
+            if (is.na(alt.stratum)) {
+              msg("Er is een alternatieve weegfactor (%s) ingesteld voor dataset %d zonder stratum_totaal. Gebruik dezelfde stratumkolom als bij deze weging om missende strata te voorkomen.", alt.weight, alt.dataset, level=ERR)
+            }
+            if (!(alt.stratum %in% colnames(data.tmp))) {
+              msg("Kolomopbouw gebruikt alternatieve stratum %s voor dataset %d, maar die variabele komt niet voor in de data.", alt.stratum, alt.dataset, level=ERR)
+            }
+            
+            alt.superweegfactor = data.tmp$superweegfactor
+            alt.superweegfactor[data.tmp$tbl_dataset == alt.dataset] = data.tmp[[alt.weight]][data.tmp$tbl_dataset == alt.dataset]
+            
+            alt.superstrata = data.tmp$superstrata
+            alt.dataset.rows = which(data.tmp$tbl_dataset == alt.dataset)
+            alt.strata.values = data.tmp[[alt.stratum]][alt.dataset.rows]
+            if (any(is.na(alt.strata.values))) {
+              msg("Alternatieve stratum %s voor dataset %d bevat missende waarden.", alt.stratum, alt.dataset, level=WARN)
+            }
+            alt.levels = sort(unique(alt.strata.values))
+            alt.levels = alt.levels[!is.na(alt.levels)]
+            if (length(alt.levels) > 0) {
+              for (si in 1:length(alt.levels)) {
+                alt.superstrata[alt.dataset.rows[data.tmp[[alt.stratum]][alt.dataset.rows] == alt.levels[si]]] = alt.dataset*1000 + si
+              }
+            }
+            
+            if (any(is.na(alt.superweegfactor[data.tmp$tbl_dataset == alt.dataset]))) {
+              msg("Alternatieve weegfactor %s voor dataset %d bevat missende waarden; beleid uit missing_weegfactoren wordt hier niet apart op toegepast.", alt.weight, alt.dataset, level=WARN)
+            }
+            
+            data.alt = data.tmp
+            data.alt$superweegfactor = alt.superweegfactor
+            data.alt$superstrata = alt.superstrata
+            data.alt = data.alt[!is.na(data.alt$superweegfactor) & !is.na(data.alt$superstrata),]
+            if (nrow(data.alt) <= 0) {
+              msg("Alternatieve weegfactor/stratum (%s / %s) voor dataset %d levert geen bruikbare rijen op en wordt overgeslagen.", alt.weight, alt.stratum, alt.dataset, level=WARN)
+              next
+            }
+            design.key = paste0("d", alt.dataset, "::", alt.weight, "::", alt.stratum)
+            if("fpc" %in% colnames(datasets)){
+              msg("Alternatieve totaalweging gebruikt aangepaste strata (%s) voor dataset %d; FPC wordt voor dit design uitgeschakeld om inconsistentie met de oorspronkelijke strata-indeling te voorkomen.", alt.stratum, alt.dataset, level=WARN)
+            }
+            designs[[design.key]] = svydesign(ids=~1, strata=~superstrata, weights=~superweegfactor, data=data.alt)
+          }
+        }
       }
       
       
       t.before = proc.time()["elapsed"]
-      results = bind_rows(results, GetTableRow(var, design, kolom_opbouw, subsetmatches))
+      results = bind_rows(results, GetTableRow(var, designs, kolom_opbouw, subsetmatches))
       t.after = proc.time()["elapsed"]
       t.vars = c(t.vars, t.after-t.before)
       
@@ -1022,7 +1109,7 @@ log.save = T
         msg("Er is geen geldige waarde opgegeven voor multiple_testing_correction. Geldigde waardes zijn 'BH' voor Benjamini-Hochberg of 'bonferroni' voor Bonferroni.", level=ERR)
       }
     }
-
+    
   }
   
   # controleren of de gewenste logo's bestaan - anders kunnen de HTML- en Excel-functies ze niet openen

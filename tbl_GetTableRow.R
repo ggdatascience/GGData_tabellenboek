@@ -61,10 +61,22 @@ MatchTables = function (weighted, unweighted, is_2d=F) {
 
 # col.design = kolom_opbouw
 # s = 43
-GetTableRow = function (var, design, col.design, subsetmatches) {
+GetTableRow = function (var, designs, col.design, subsetmatches) {
   msg("Variabele %s wordt uitgevoerd over %d kolommen.", var, nrow(col.design), level=MSG)
   
   results = data.frame()
+  design.default = designs$default
+  if (is.null(design.default)) {
+    msg("Geen standaarddesign ontvangen voor berekening van %s.", var, level=ERR)
+  }
+  
+  design.key = function (col.idx) {
+    if (!"design.weegfactor" %in% colnames(col.design) || is.na(col.design$design.weegfactor[col.idx]) || !is.na(col.design$crossing[col.idx])) {
+      return("default")
+    }
+    stratum.value = ifelse("design.stratum" %in% colnames(col.design), col.design$design.stratum[col.idx], NA)
+    return(paste0("d", col.design$dataset[col.idx], "::", col.design$design.weegfactor[col.idx], "::", stratum.value))
+  }
   
   col.design = col.design %>% group_by(dataset, subset, year, crossing, test.col)
   colgroups = group_keys(col.design)
@@ -80,7 +92,7 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
     # (anders zou voor ieder niveau in de subset totaalkolommen van andere datasets opnieuw berekend worden - zonde)
     for (s in 1:length(subsetvals)) {
       # bestaat hier data voor?
-      if (!(paste0("dummy._col", leadingcol, ".s.", unname(subsetvals[s])) %in% names(design$variables)))
+      if (!(paste0("dummy._col", leadingcol, ".s.", unname(subsetvals[s])) %in% names(design.default$variables)))
         next
       
       msg("Variabele %s wordt uitgevoerd op subset %s met niveau %s (%s)", var, leadingsubset, as.character(unname(subsetvals[s])), names(subsetvals)[s], level=DEBUG)
@@ -91,7 +103,7 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
         msg("Subset %d: dataset %d, subset %s, jaar %s, crossing %s", level=DEBUG,
             i, colgroups$dataset[i], colgroups$subset[i], colgroups$year[i], colgroups$crossing[i])
         
-        if (!(paste0("dummy._col", leadingcol, ".s.", unname(subsetvals[s])) %in% names(design$variables)))
+        if (!(paste0("dummy._col", leadingcol, ".s.", unname(subsetvals[s])) %in% names(design.default$variables)))
           next
         
         # er zijn nu twee scenario's:
@@ -114,20 +126,20 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
           cols = col.design$col.index[group_rows(col.design)[[i]]]
           
           desired.cols = paste0("dummy._col", cols, ".s.", subsetval)
-          if (!all(desired.cols %in% names(design$variables))) {
+          if (!all(desired.cols %in% names(design.default$variables))) {
             msg("Er is geen data beschikbaar voor kolom %s bij dataset %d, subset %s, jaar %s, crossing %s, selectie %s.",
-                str_c(cols[!(paste0("dummy._col", cols, ".s.", subsetval) %in% names(design$variables))], collapse=", "),
+                str_c(cols[!(paste0("dummy._col", cols, ".s.", subsetval) %in% names(design.default$variables))], collapse=", "),
                 colgroups$dataset[i], colgroups$subset[i], colgroups$year[i], colgroups$crossing[i], subsetval, level=WARN)
-            desired.cols = desired.cols[desired.cols %in% names(design$variables)]
+            desired.cols = desired.cols[desired.cols %in% names(design.default$variables)]
             if (length(desired.cols) == 0)
               next
           }
           
           selection = str_c(desired.cols, collapse=" | ")
-          design.subset = subset(design, eval(parse(text=selection)))
+          design.subset = subset(design.default, eval(parse(text=selection)))
           
           weighted.raw = svytable(formula=as.formula(paste0("~", var, "+", colgroups$crossing[i])),
-                              design=design.subset)
+                                  design=design.subset)
           unweighted.raw = table(design.subset$variables[[var]], design.subset$variables[[colgroups$crossing[i]]])
           weighted = MatchTables(weighted.raw, unweighted.raw, T)[[1]]
           unweighted = MatchTables(weighted.raw, unweighted.raw, T)[[2]]
@@ -135,7 +147,7 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
           
           pvals = matrix(NA, nrow=nrow(weighted), ncol=ncol(weighted))
           rownames(pvals) = rownames(weighted)
-   
+          
           if (!is.na(colgroups$test.col[i]) && colgroups$test.col[i] == 0) {
             if (min(dim(weighted)) < 2) {
               msg("Bij variabele %s met crossing %s werd maar één rij/kolom in de kruistabel gevonden (dimensies %s). Hierdoor kan geen chi2-test worden uitgevoerd. Controleer de data.",
@@ -171,7 +183,7 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
             }
             for (j in 1:length(selection)) {
               select = selection[j]
-              design.subset = subset(design, eval(parse(text=select)))
+              design.subset = subset(design.default, eval(parse(text=select)))
               source.col = str_split(select, fixed(" | "))[[1]][1]
               
               answers = rownames(weighted)
@@ -217,14 +229,20 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
         } else {
           # geen crossing; totaal
           col = col.design$col.index[group_rows(col.design)[[i]]]
+          col.design.key = design.key(col)
+          design.current = designs[[col.design.key]]
+          if (is.null(design.current)) {
+            msg("Geen design gevonden voor kolom %d met sleutel %s. Standaardweging gebruikt.", col, col.design.key, level=WARN)
+            design.current = design.default
+          }
           
-          if (!(paste0("dummy._col", col, ".s.", subsetval) %in% names(design$variables))) {
+          if (!(paste0("dummy._col", col, ".s.", subsetval) %in% names(design.current$variables))) {
             msg("Er is geen data beschikbaar voor kolom %d bij dataset %d, subset %s, jaar %s, selectie %s.",
                 col, colgroups$dataset[i], colgroups$subset[i], colgroups$year[i], subsetval, level=WARN)
             next
           }
           
-          weighted = svytable(formula=as.formula(paste0("~", var, "+dummy._col", col, ".s.", subsetval)), design=design)
+          weighted = svytable(formula=as.formula(paste0("~", var, "+dummy._col", col, ".s.", subsetval)), design=design.current)
           if ("TRUE" %in% colnames(weighted)) {
             if(nrow(weighted) == 1){
               answer_name <- rownames(weighted)
@@ -238,7 +256,7 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
             weighted = rep(NA, nrow(weighted))
             names(weighted) = names
           }
-          unweighted = MatchTables(weighted, table(design$variables[[var]][design$variables[,paste0("dummy._col", col, ".s.", subsetval)]]))[[2]]
+          unweighted = MatchTables(weighted, table(design.current$variables[[var]][design.current$variables[,paste0("dummy._col", col, ".s.", subsetval)]]))[[2]]
           if (sum(unweighted, na.rm=T) <= 0) unweighted = rep(NA, length(weighted))
           
           n = length(weighted)
@@ -258,7 +276,12 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
                 selection = paste0(selection, ".s.", subsetmatches[subsetmatches[,1] == subsetvals[s], col.design$subset[colgroups$test.col[i]]])
               }
             }
-            design.subset = subset(design, eval(parse(text=selection)))
+            test.design.key = design.key(colgroups$test.col[i])
+            if (test.design.key != col.design.key) {
+              msg("Kolom %d vergelijkt met kolom %d, maar beide gebruiken verschillende weegfactoren. Significantie wordt berekend met de weging van kolom %d.",
+                  col, colgroups$test.col[i], col, level=WARN)
+            }
+            design.subset = subset(design.current, eval(parse(text=selection)))
             
             answers = names(weighted)
             for (answer in answers) {
@@ -311,10 +334,10 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
       # dit betekent meerdere kolommen vullen, want crossing
       cols = col.design$col.index[group_rows(col.design)[[i]]]
       selection = str_c(paste0("dummy._col", cols), collapse=" | ")
-      design.subset = subset(design, eval(parse(text=selection)))
+      design.subset = subset(design.default, eval(parse(text=selection)))
       
       weighted.raw = svytable(formula=as.formula(paste0("~", var, "+", colgroups$crossing[i])),
-                          design=design.subset)
+                              design=design.subset)
       unweighted.raw = table(design.subset$variables[[var]], design.subset$variables[[colgroups$crossing[i]]])
       weighted = MatchTables(weighted.raw, unweighted.raw, T)[[1]]
       unweighted = MatchTables(weighted.raw, unweighted.raw, T)[[2]]
@@ -354,7 +377,7 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
           
           for (j in 1:length(selection)) {
             select = selection[j]
-            design.subset = subset(design, eval(parse(text=select)))
+            design.subset = subset(design.default, eval(parse(text=select)))
             source.col = str_split(select, fixed(" | "))[[1]][1]
             
             answers = rownames(weighted)
@@ -402,8 +425,14 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
       # geen crossing; totaal
       
       col = col.design$col.index[group_rows(col.design)[[i]]]
+      col.design.key = design.key(col)
+      design.current = designs[[col.design.key]]
+      if (is.null(design.current)) {
+        msg("Geen design gevonden voor kolom %d met sleutel %s. Standaardweging gebruikt.", col, col.design.key, level=WARN)
+        design.current = design.default
+      }
       
-      weighted = svytable(formula=as.formula(paste0("~", var, "+dummy._col", col)), design=design)
+      weighted = svytable(formula=as.formula(paste0("~", var, "+dummy._col", col)), design=design.current)
       if ("TRUE" %in% colnames(weighted)) {
         if(nrow(weighted) == 1){
           answer_name <- rownames(weighted)
@@ -417,7 +446,7 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
         weighted = rep(NA, nrow(weighted))
         names(weighted) = names
       }
-      unweighted = MatchTables(weighted, table(design$variables[[var]][design$variables[,paste0("dummy._col", col)]]))[[2]]
+      unweighted = MatchTables(weighted, table(design.current$variables[[var]][design.current$variables[,paste0("dummy._col", col)]]))[[2]]
       if (sum(unweighted, na.rm=T) <= 0) unweighted = rep(NA, length(weighted))
       n = length(weighted)
       
@@ -433,7 +462,12 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
               col, colgroups$test.col[i], level=WARN)
         } else {
           selection = str_c(paste0("dummy._col", c(col, colgroups$test.col[i])), collapse=" | ")
-          design.subset = subset(design, eval(parse(text=selection)))
+          test.design.key = design.key(colgroups$test.col[i])
+          if (test.design.key != col.design.key) {
+            msg("Kolom %d vergelijkt met kolom %d, maar beide gebruiken verschillende weegfactoren. Significantie wordt berekend met de weging van kolom %d.",
+                col, colgroups$test.col[i], col, level=WARN)
+          }
+          design.subset = subset(design.current, eval(parse(text=selection)))
           
           answers = names(weighted)
           for (answer in answers) {
