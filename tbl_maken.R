@@ -1165,8 +1165,9 @@ log.save = T
     # MTC
     if (
       "multiple_testing_correction" %in%
-        colnames(algemeen) &&
-        !is.na(algemeen$multiple_testing_correction)
+      colnames(algemeen) &&
+      !is.na(algemeen$multiple_testing_correction) &&
+      any(!is.na(results$sign))
     ) {
       # Stap 1: Identificeer de daadwerkelijk uitgevoerde tests per subset
       # - Voor dichotome variabelen: tel slechts één test per variabele per crossing
