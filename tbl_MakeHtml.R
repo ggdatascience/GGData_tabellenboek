@@ -6,13 +6,6 @@
 #
 #
 
-# constantes voor het vervangen van cellen met te weinig antwoorden
-# dit is nodig omdat bij het direct plaatsen van tekst de hele matrix een karakter wordt
-A_TOOSMALL = -1
-Q_TOOSMALL = -2
-Q_MISSING = -3
-A_EXACTZERO = -4
-
 # functie om vergelijken met NA mogelijk te maken
 # LET OP: de naam is ietwat verwarrend; de werking is juist NIET gelijk aan identical()
 # identical() geeft één T/F, NA.identical geeft een lijst, zoals is.na() (zodat dit gecombineerd kan worden met andere selecties)
@@ -481,14 +474,14 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
       
       # benodigde resultaten ophalen, zodat we niet steeds belachelijke selectors nodig hebben
       data.var = data.frame()
+      cols = c("var", "val", "crossing", "crossing.val", "sign", "sign.vs", "n.unweighted", "n_question", "perc.weighted", "suppression", "display_include", "is_dichotoom")
+      cols = cols[cols %in% colnames(results)]
       for (j in 1:nrow(col.design)) {
         if (!is.na(col.design$subset[j])) {
           subset.col = subset.val
           if (col.design$subset[j] != subset) {
             subset.col = subsetmatches[subsetmatches[,1] == subset.val, col.design$subset[j]]
           }
-          cols = c("var", "val", "crossing", "crossing.val", "sign", "sign.vs", "n.unweighted", "n_question", "perc.weighted", "suppression", "display_include", "is_dichotoom")
-          cols = cols[cols %in% colnames(results)]
           data.tmp = results[which(NA.identical(results$dataset, col.design$dataset[j]) & NA.identical(results$subset, col.design$subset[j]) &
                                      NA.identical(results$subset.val, subset.col) &
                                      NA.identical(results$year, col.design$year[j]) & NA.identical(results$crossing, col.design$crossing[j]) &
@@ -499,8 +492,6 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
           data.tmp$col.index = col.design$col.index[j]
           data.var = bind_rows(data.var, data.tmp)
         } else {
-          cols = c("var", "val", "crossing", "crossing.val", "sign", "sign.vs", "n.unweighted", "n_question", "perc.weighted", "suppression", "display_include", "is_dichotoom")
-          cols = cols[cols %in% colnames(results)]
           data.tmp = results[which(NA.identical(results$dataset, col.design$dataset[j]) & NA.identical(results$subset, col.design$subset[j]) &
                                      is.na(results$subset.val) &
                                      NA.identical(results$year, col.design$year[j]) & NA.identical(results$crossing, col.design$crossing[j]) &
@@ -545,37 +536,12 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
           output[vals,j] = data.var$n[data.var$col.index == col.design$col.index[j] & data.var$val %in% rownames(output)]
         
         # onderdrukking toepassen
-        # als de suppression-kolom beschikbaar is (nieuwe cache), gebruik die; anders de oude logica (backwards compatible)
-        if ("suppression" %in% colnames(data.var)) {
-          # nieuwe methode: suppression vooraf berekend in tbl_maken.R
-          data.col = data.var[data.var$col.index == col.design$col.index[j] & data.var$val %in% rownames(output), ]
-          for (v in data.col$val) {
-            sup = data.col$suppression[data.col$val == v]
-            if (length(sup) > 0 && sup != 0) {
-              output[as.character(v), j] = sup
-            }
-          }
-        } else {
-          # oude methode: onderdrukking hier berekenen (backwards compatible met cache zonder suppression)
-          n_q_vals <- data.var$n_question[data.var$col.index == col.design$col.index[j]]
-          n_q <- if (length(n_q_vals) > 0) n_q_vals[1] else 0
-          
-          output[which(output[,j] == 0), j] = A_EXACTZERO
-          output[which(output[,j] <= algemeen$afkapwaarde_antwoord & output[,j] > 0), j] = A_TOOSMALL
-          
-          if (!is.na(indeling_rijen$verberg_crossings[i]) && !is.na(col.design$crossing[j])) {
-            output[,j] = Q_MISSING
-          } else if (n_q == 0) {
-            output[,j] = Q_MISSING
-          } else if (n_q < algemeen$min_observaties_per_vraag) {
-            output[,j] <- Q_TOOSMALL
-          } else if (any(data.var$n.unweighted[data.var$col.index == col.design$col.index[j]] < algemeen$min_observaties_per_antwoord, na.rm=T)) {
-            if (algemeen$vraag_verbergen_bij_missend_antwoord) {
-              output[,j] <- A_TOOSMALL
-            } else {
-              data.col = data.var[data.var$col.index == col.design$col.index[j] & data.var$val %in% rownames(output),]
-              output[rownames(output) %in% data.col$val[which(data.col$n.unweighted < algemeen$min_observaties_per_antwoord)],j] <- A_TOOSMALL
-            }
+        # onderdrukking toepassen op basis van vooraf berekende suppression-kolom
+        data.col = data.var[data.var$col.index == col.design$col.index[j] & data.var$val %in% rownames(output), ]
+        for (v in data.col$val) {
+          sup = data.col$suppression[data.col$val == v]
+          if (length(sup) > 0 && sup != 0) {
+            output[as.character(v), j] = sup
           }
         }
         
@@ -628,11 +594,6 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
 
       # dichotoom? zo ja, alleen 1 (= ja) laten zien en geen kop met de vraag
       # zo nee, kop met de vraag en alle waardes laten zien
-      # is_dichotoom wordt bepaald via add_dichotoom_flags() in tbl_helpers.R
-      if (!"is_dichotoom" %in% colnames(data.var)) {
-        # fallback: resultaten zonder is_dichotoom (bijv. oude cache); berekenen met helper
-        data.var = add_dichotoom_flags(data.var, dichotoom, niet_dichotoom, algemeen)
-      }
       is_dich = any(data.var$is_dichotoom, na.rm = TRUE)
       
       if (is_dich) {

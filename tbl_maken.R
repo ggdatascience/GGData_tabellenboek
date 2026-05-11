@@ -921,26 +921,6 @@ log.save = T
         # deze functie werd eerst meerdere keren aangeroepen in tbl_MakeExcel, wat natuurlijk veel meer resources kost
         # helaas zijn de resultaten die inmiddels opgeslagen zijn wel volgens de oude manier berekend, dus moeten we de correctie voor de zekerheid uitvoeren
         results = results %>% distinct()
-        
-        # include-flags toevoegen voor output/MTC (backwards compatible)
-        if (!"is_dichotoom" %in% colnames(results)) {
-          results = add_dichotoom_flags(results, dichotoom, niet_dichotoom, algemeen)
-        }
-
-        # Onderdrukkingsvlaggen toevoegen indien afwezig (backwards compatible met oudere cache)
-        if (!"n_question" %in% colnames(results) || !"suppression" %in% colnames(results)) {
-          results <- add_suppression_flags(results, algemeen, indeling_rijen)
-        }
-        
-        # Backwards compatible check voor opgeslagen alpha 
-        alpha_file = sprintf("resultaten_csv/alphas_%s.csv", basename(config.file))
-        if (file.exists(alpha_file)) {
-          mtc_per_subset = read.csv(alpha_file, fileEncoding="UTF-8")
-          msg("Opgeslagen Multiple Testing correctie(s) gevonden in cache (alphas.csv).", level=MSG)
-        } else {
-          msg("Let op! Geen alphas cache gevonden. De standaardwaarde uit de configuratie wordt gebruikt.", level=WARN)
-          mtc_per_subset = data.frame(subset=character(), subset.val=numeric(), corrected_alpha=numeric(), n_tests=numeric())
-        }
       }
     } else {
       msg("Er zijn eerdere resultaten aangetroffen vanuit deze configuratie (%s), maar de instellingen waren niet identiek. Berekening wordt opnieuw uitgevoerd.", basename(config.file), level=MSG)
@@ -1157,105 +1137,9 @@ log.save = T
 
     results = results %>% distinct()
 
-    
-    # Bereken onderdrukkingsvlaggen (n_question, suppression, var_suppressed)
-    # Dit is nodig voor MTC en wordt hergebruikt in tbl_MakeExcel/tbl_MakeHtml
-    results <- add_suppression_flags(results, algemeen, indeling_rijen)
-
-    # MTC
-    if (
-      "multiple_testing_correction" %in%
-        colnames(algemeen) &&
-        !is.na(algemeen$multiple_testing_correction)
-    ) {
-      # Stap 1: Identificeer de daadwerkelijk uitgevoerde tests per subset
-      # - Voor dichotome variabelen: tel slechts één test per variabele per crossing
-      # - Voor andere variabelen: tel unieke (var, crossing, antwoord) combinaties
-      # - Tel de testen op totaalkolommen op basis van kolom_opbouw
-      n_sign_tests <- count_tests(
-        results,
-        algemeen,
-        crossings_toetsen,
-        indeling_rijen,
-        dichotoom,
-        niet_dichotoom
-      )
-      
-     # Stap 2: Tel tests per subset
-      n_sign_tests_per_subset = n_sign_tests %>%
-        group_by(subset, subset.val) %>%
-        summarize(n_sign_tests = sum(n_sign_tests), .groups = 'drop')
-
-      
-      # MTC berekenen per subset
-      mtc_method <- algemeen$multiple_testing_correction
-      base_alpha <- algemeen$confidence_level
-
-      if (grepl("bf|bonferonni|bonferroni", mtc_method, ignore.case = TRUE)) {
-        mtc_per_subset <- n_sign_tests_per_subset |>
-          mutate(
-            corrected_alpha = ifelse(
-              n_sign_tests > 0,
-              base_alpha / n_sign_tests,
-              base_alpha
-            )
-          )
-      } else if (
-        grepl("bh|benjamini|hochberg", mtc_method, ignore.case = TRUE)
-      ) {
-        # BH heeft de daadwerkelijke p-waardes nodig
-        mtc_per_subset <- n_sign_tests_per_subset |>
-          rowwise() |>
-          mutate(
-            corrected_alpha = {
-              # Haal p-waardes op voor deze subset
-              pvals <- results |>
-                filter(
-                  (is.na(subset) & is.na(.env$subset)) |
-                    (!is.na(subset) & subset == .env$subset),
-                  (is.na(subset.val) & is.na(.env$subset.val)) |
-                    (!is.na(subset.val) & subset.val == .env$subset.val),
-                  !is.na(sign)
-                ) |>
-                pull(sign) |>
-                sort()
-
-              if (length(pvals) > 0 && n_sign_tests > 0) {
-                ranks <- seq_along(pvals)
-                thresholds <- (ranks / n_sign_tests) * base_alpha
-                significant <- which(pvals <= thresholds)
-                if (length(significant) > 0) max(pvals[significant]) else 1e-20
-              } else {
-                1e-20
-              }
-            }
-          ) |>
-          ungroup()
-      } else {
-        msg(
-          "Onbekende multiple testing correctie methode: %s. Geen correctie toegepast.",
-          mtc_method,
-          level = WARN
-        )
-        mtc_per_subset <- n_sign_tests_per_subset |>
-          mutate(corrected_alpha = base_alpha)
-      }
-
-      msg(
-        "Multiple Testing Correctie (%s) is berekend per subset.",
-        mtc_method,
-        level = MSG
-      )
-    } else {
-      mtc_per_subset <- data.frame(
-        subset = character(),
-        subset.val = numeric(),
-        corrected_alpha = numeric(),
-        n_sign_tests = numeric()
-      )
-    }
-
     # resultaten opslaan voor hergebruik
+    # N.B.: onderdrukkingsvlaggen en MTC worden bewust NIET gecached,
+    # zodat wijzigingen in afkapwaardes en correctiemethode altijd effect hebben.
     write.csv(
       varlist,
       sprintf("resultaten_csv/vars_%s.csv", basename(config.file)),
@@ -1286,11 +1170,103 @@ log.save = T
       fileEncoding = "UTF-8",
       row.names = F
     )
-    write.csv(
-      mtc_per_subset,
-      sprintf("resultaten_csv/alphas_%s.csv", basename(config.file)),
-      fileEncoding = "UTF-8",
-      row.names = F
+  }
+  
+  # Bereken dichotoom- en onderdrukkingsvlaggen op basis van actuele configuratie.
+  # Staat bewust NA het cachen van results zodat configuratiewijzigingen altijd effect hebben.
+  results = add_dichotoom_flags(results, dichotoom, niet_dichotoom, algemeen)
+  results <- add_suppression_flags(results, algemeen, indeling_rijen)
+
+  # Multiple Testing Correctie (altijd opnieuw berekend, niet gecached)
+  if (
+    "multiple_testing_correction" %in%
+      colnames(algemeen) &&
+      !is.na(algemeen$multiple_testing_correction)
+  ) {
+    # Stap 1: Identificeer de daadwerkelijk uitgevoerde tests per subset
+    # - Voor dichotome variabelen: tel slechts één test per variabele per crossing
+    # - Voor andere variabelen: tel unieke (var, crossing, antwoord) combinaties
+    # - Tel de testen op totaalkolommen op basis van kolom_opbouw
+    n_sign_tests <- count_tests(
+      results,
+      algemeen,
+      crossings_toetsen,
+      indeling_rijen,
+      dichotoom,
+      niet_dichotoom
+    )
+    
+   # Stap 2: Tel tests per subset
+    n_sign_tests_per_subset = n_sign_tests %>%
+      group_by(subset, subset.val) %>%
+      summarize(n_sign_tests = sum(n_sign_tests), .groups = 'drop')
+
+    
+    # MTC berekenen per subset
+    mtc_method <- algemeen$multiple_testing_correction
+    base_alpha <- algemeen$confidence_level
+
+    if (grepl("bf|bonferonni|bonferroni", mtc_method, ignore.case = TRUE)) {
+      mtc_per_subset <- n_sign_tests_per_subset |>
+        mutate(
+          corrected_alpha = ifelse(
+            n_sign_tests > 0,
+            base_alpha / n_sign_tests,
+            base_alpha
+          )
+        )
+    } else if (
+      grepl("bh|benjamini|hochberg", mtc_method, ignore.case = TRUE)
+    ) {
+      # BH heeft de daadwerkelijke p-waardes nodig
+      mtc_per_subset <- n_sign_tests_per_subset |>
+        rowwise() |>
+        mutate(
+          corrected_alpha = {
+            # Haal p-waardes op voor deze subset
+            pvals <- results |>
+              filter(
+                (is.na(subset) & is.na(.env$subset)) |
+                  (!is.na(subset) & subset == .env$subset),
+                (is.na(subset.val) & is.na(.env$subset.val)) |
+                  (!is.na(subset.val) & subset.val == .env$subset.val),
+                !is.na(sign)
+              ) |>
+              pull(sign) |>
+              sort()
+
+            if (length(pvals) > 0 && n_sign_tests > 0) {
+              ranks <- seq_along(pvals)
+              thresholds <- (ranks / n_sign_tests) * base_alpha
+              significant <- which(pvals <= thresholds)
+              if (length(significant) > 0) max(pvals[significant]) else 1e-20
+            } else {
+              1e-20
+            }
+          }
+        ) |>
+        ungroup()
+    } else {
+      msg(
+        "Onbekende multiple testing correctie methode: %s. Geen correctie toegepast.",
+        mtc_method,
+        level = WARN
+      )
+      mtc_per_subset <- n_sign_tests_per_subset |>
+        mutate(corrected_alpha = base_alpha)
+    }
+
+    msg(
+      "Multiple Testing Correctie (%s) is berekend per subset.",
+      mtc_method,
+      level = MSG
+    )
+  } else {
+    mtc_per_subset <- data.frame(
+      subset = character(),
+      subset.val = numeric(),
+      corrected_alpha = numeric(),
+      n_sign_tests = numeric()
     )
   }
   

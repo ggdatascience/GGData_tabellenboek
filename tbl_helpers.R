@@ -13,6 +13,13 @@ WARN = 2
 MSG = 3
 DEBUG = 4
 
+# Constanten voor onderdrukkingscodes in output-matrices
+# (centraal gedefinieerd zodat add_suppression_flags, MakeExcel en MakeHtml dezelfde waarden gebruiken)
+A_TOOSMALL = -1  # antwoordcategorie te klein of onder afkapwaarde
+Q_TOOSMALL = -2  # hele vraag te weinig respondenten
+Q_MISSING  = -3  # vraag geheel afwezig / verborgen crossing
+A_EXACTZERO = -4 # exact nul procent
+
 # functie om (fout)meldingen weer te geven
 # middels het level kunnen verschillende niveau's worden aangegeven, waarbij een lager niveau
 # altijd wordt weergegeven (dus msg("test", WARN) wordt ook getoond bij log.level = 3) 
@@ -258,28 +265,28 @@ add_suppression_flags <- function(results, algemeen, indeling_rijen) {
     mutate(
       suppression = case_when(
         # Kolomniveau: verberg_crossings is gezet en dit is een crossing-kolom
-        verberg_crossings & !is.na(crossing)                                      ~ -3L, # Q_MISSING
+        verberg_crossings & !is.na(crossing)                                      ~ Q_MISSING,
         # Kolomniveau: alle waarden zijn NA
-        all_na                                                                    ~ -3L, # Q_MISSING
+        all_na                                                                    ~ Q_MISSING,
         # Kolomniveau: geen respondenten
-        n_question == 0                                                           ~ -3L, # Q_MISSING
+        n_question == 0                                                           ~ Q_MISSING,
         # Kolomniveau: te weinig respondenten voor de hele vraag
-        n_question < algemeen$min_observaties_per_vraag                           ~ -2L, # Q_TOOSMALL
+        n_question < algemeen$min_observaties_per_vraag                           ~ Q_TOOSMALL,
         # Celniveau: exact nul (vóór de n.unweighted check, want n=0 impliceert perc=0)
-        perc.weighted == 0                                                        ~ -4L, # A_EXACTZERO
+        perc.weighted == 0                                                        ~ A_EXACTZERO,
         # Kolomniveau: een antwoord te klein én config zegt hele vraag onderdrukken
-        any_answer_toosmall & algemeen$vraag_verbergen_bij_missend_antwoord       ~ -1L, # A_TOOSMALL
+        any_answer_toosmall & algemeen$vraag_verbergen_bij_missend_antwoord       ~ A_TOOSMALL,
         # Celniveau: dit specifieke antwoord te weinig respondenten
-        n.unweighted < algemeen$min_observaties_per_antwoord                      ~ -1L, # A_TOOSMALL
+        n.unweighted < algemeen$min_observaties_per_antwoord                      ~ A_TOOSMALL,
         # Celniveau: onder de afkapwaarde
-        perc.weighted <= algemeen$afkapwaarde_antwoord & perc.weighted > 0        ~ -1L, # A_TOOSMALL
+        perc.weighted <= algemeen$afkapwaarde_antwoord & perc.weighted > 0        ~ A_TOOSMALL,
         TRUE                                                                      ~ 0L
       )
     ) %>%
     # var_suppressed: TRUE als de variabele als geheel onderdrukt is
     # A_EXACTZERO (-4) telt hierbij niet mee als onderdrukking
     group_by(dataset, subset, subset.val, year, crossing, var, val) %>%
-    mutate(var_suppressed = !all(suppression == 0 | suppression == -4L)) %>%
+    mutate(var_suppressed = !all(suppression == 0 | suppression == A_EXACTZERO)) %>%
     ungroup() %>%
     # Tijdelijke hulpkolommen opruimen
     select(-all_na, -any_answer_toosmall, -verberg_crossings)
