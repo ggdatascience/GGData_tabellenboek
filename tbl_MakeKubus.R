@@ -49,9 +49,7 @@ MaakKubusData <- function(
   
   # Variabelen voorbereiden en ontdubbelen om dubbele rijen in configs te voorkomen.
   vars_df <- variabelen
-  if (any(duplicated(vars_df$variabelen))) {
-    vars_df <- vars_df |> dplyr::distinct()
-  }
+  vars_df <- vars_df |> dplyr::distinct()
   # Weegfactor kolommen uit variabelen hernoemen zodat ze niet botsen met configuratie
   # en altijd terug te vinden zijn in de config-rij.
   wf_cols <- grep("^weegfactor", names(vars_df), value=TRUE)
@@ -196,6 +194,10 @@ MaakKubusData <- function(
       args <- list(...)
       bron <- args$bron
       is_kubus <- if (isTRUE(args$geen_crossings)) 0 else 1
+
+      # Outputpad en bestandsnaam centraal opbouwen in een compacte, platform-onafhankelijke stijl.
+      out_dir <- sprintf("%s/%s/%s", output_folder, as.character(args$jaar_voor_analyse), ifelse(is_kubus == 1, as.character(args$gebiedsniveau), paste0(as.character(args$gebiedsniveau), "_totaal")))
+      bestandsnaam <- sprintf("%s/%s_%s%s.xlsx", out_dir, swing_output_bestandsnaam, args$vars, ifelse(is_kubus == 1, paste0("_", args$crossings), ""))
       
       # Weegfactor bepalen met prioriteit:
       # 1) dataset-specifieke override op naam, 2) dataset-specifieke override op id,
@@ -285,13 +287,6 @@ MaakKubusData <- function(
       
       # Geen records na filtering: log en ga door naar volgende config.
       if (nrow(kubusdata) == 0) {
-        if (is_kubus) {
-          out_dir <- file.path(output_folder, as.character(args$jaar_voor_analyse), as.character(args$gebiedsniveau))
-          bestandsnaam <- file.path(out_dir, paste0(swing_output_bestandsnaam, "_", args$vars, "_", args$crossings, ".xlsx"))
-        } else {
-          out_dir <- file.path(output_folder, as.character(args$jaar_voor_analyse), paste0(as.character(args$gebiedsniveau), "_totaal"))
-          bestandsnaam <- file.path(out_dir, paste0(swing_output_bestandsnaam, "_", args$vars, ".xlsx"))
-        }
         msg("Geen data over voor kubus export voor variabele %s: %s (mogelijk alles missing).",args$vars, bestandsnaam, level = WARN)
         return()
       }
@@ -491,15 +486,7 @@ MaakKubusData <- function(
       openxlsx::writeData(wb, "Indicators", indicators_df)
       
       # Opslaan in submap {output_folder}/{jaar}/{gebiedsniveau}
-      if (is_kubus) {
-        out_dir <- file.path(output_folder, as.character(args$jaar_voor_analyse), as.character(args$gebiedsniveau))
-        if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
-        bestandsnaam <- file.path(out_dir, paste0(swing_output_bestandsnaam, "_", args$vars, "_", args$crossings, ".xlsx"))
-      } else {
-        out_dir <- file.path(output_folder, as.character(args$jaar_voor_analyse), paste0(as.character(args$gebiedsniveau), "_totaal"))
-        if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
-        bestandsnaam <- file.path(out_dir, paste0(swing_output_bestandsnaam, "_", args$vars, ".xlsx"))
-      }
+      if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
       
       # Schrijfbestand opslaan; errors loggen zonder het hele proces te stoppen.
       tryCatch({
