@@ -980,11 +980,7 @@ log.save = T
       var = varlist$inhoud[i]
 
       if (!var %in% colnames(data)) {
-        msg(
-          "Variabele %s is wel opgegeven in indeling_rijen, maar komt niet voor in de dataset. Controleer de configuratie.",
-          var,
-          level = WARN
-        )
+        msg("Variabele %s is wel opgegeven in indeling_rijen, maar komt niet voor in de dataset. Controleer de configuratie.", var, level=WARN)
         next
       }
 
