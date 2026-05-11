@@ -91,7 +91,11 @@ log.save = T
   for (sheet in sheets) {
     
     if (!sheet %in% available_sheets) {
-      msg("Tabblad %s bestaat niet in het configuratiebestand. Dit kan door een fout komen of omdat je met een oude configuratiebestand werkt. De functionaliteit uit dit tabblad wordt waar mogelijk overgeslagen.", sheet, level = WARN)
+      if (sheet %in% c("swing_configuraties", "swing_variabelen", "swing_crossings")) {
+        msg("Tabblad %s bestaat niet in het configuratiebestand. Dit kan door een fout komen of omdat je met een oude configuratiebestand werkt. De functionaliteit uit dit tabblad wordt waar mogelijk overgeslagen.", sheet, level = WARN)
+      } else {
+        msg("Tabblad %s bestaat niet in het configuratiebestand. Voeg deze toe volgens de specificaties in de handleiding.", sheet, level = ERR)
+      }
       next
     }
     
@@ -794,7 +798,8 @@ log.save = T
   # dummyvariabelen maken voor iedere kolom
   # dit is nodig om later een chi square uit te kunnen voeren over een vergelijkingsset, omdat survey pure pijn is
   # daarnaast maken we van het moment gebruik om de aantallen even op te slaan
-  n_resp_list <- list() # Initialiseer lijst
+  n_resp_list <- vector("list", nrow(kolom_opbouw) * 2)
+  n_resp_idx <- 1
   for (i in 1:nrow(kolom_opbouw)) {
     kolom = data$tbl_dataset == kolom_opbouw$dataset[i]
     # scheiden per jaar?
@@ -808,7 +813,8 @@ log.save = T
     
     data[,paste0("dummy._col", i)] = kolom
     
-    n_resp_list[[i]] <- data.frame(col=i, year=kolom_opbouw$year[i], crossing=kolom_opbouw$crossing[i], n=sum(kolom, na.rm=T))
+    n_resp_list[[n_resp_idx]] <- data.frame(col=i, year=kolom_opbouw$year[i], crossing=kolom_opbouw$crossing[i], n=sum(kolom, na.rm=T))
+    n_resp_idx <- n_resp_idx + 1
     
     # ook splitsen per subset?
     if (!is.na(kolom_opbouw$subset[i])) {
@@ -822,11 +828,15 @@ log.save = T
         if (sum(subset, na.rm=T) <= 0) next # als er geen data bestaat voor die subset is het een beetje nutteloos
         data[,paste0("dummy._col", i, ".s.", unname(val))] = subset
         
-        n_resp_list[[i]] <- bind_rows(n_resp_list[[i]], data.frame(col=i, year=kolom_opbouw$year[i], crossing=kolom_opbouw$crossing[i], subset=val, n=sum(subset, na.rm=T)))
+        if (n_resp_idx > length(n_resp_list)) {
+          length(n_resp_list) <- length(n_resp_list) * 2
+        }
+        n_resp_list[[n_resp_idx]] <- data.frame(col=i, year=kolom_opbouw$year[i], crossing=kolom_opbouw$crossing[i], subset=val, n=sum(subset, na.rm=T))
+        n_resp_idx <- n_resp_idx + 1
       }
     }
   }
-  n_resp <- bind_rows(n_resp_list)
+  n_resp <- bind_rows(n_resp_list[seq_len(n_resp_idx - 1)])
   # het kan voorkomen dat geen van de kolommen een subset hebben, maar hier wordt in latere functies wel gebruik van gemaakt... indien missend, voeg toe
   if (!"subset" %in% colnames(n_resp)) {
     n_resp$subset = NA
@@ -937,10 +947,8 @@ log.save = T
     last_weight_config <- NULL
     current_design <- NULL
 
-    # Basis variabelen bepalen (die altijd in het design moeten zitten)
-    # we kunnen de dataset die de functie in moet flink verkleinen; alle variabelen
-    # behalve[var], dummy._col[1:n], dummy.[var], de subsets en de crossings kunnen eruit
-    base_vars_names <- c(
+    # Kolommen die persistent in current_design moeten blijven voor cache hits.
+    persistent_design_cols <- c(
       kolom_opbouw$crossing,
       kolom_opbouw$subset,
       colnames(data)[str_starts(colnames(data), "dummy._col")],
@@ -950,7 +958,7 @@ log.save = T
       "tbl_dataset",
       weight.factors
     )
-    base_vars_names <- unique(base_vars_names[!is.na(base_vars_names)])
+    persistent_design_cols <- unique(persistent_design_cols[!is.na(persistent_design_cols)])
 
     # Weegfactor logica voorbereiden
     has_weight_logic <- any(str_detect(colnames(varlist), "weegfactor"))
@@ -1001,7 +1009,6 @@ log.save = T
         var,
         colnames(data)[str_starts(colnames(data), paste0("dummy.", var))]
       )
-      current_var_cols <- current_var_cols[current_var_cols %in% colnames(data)]
 
       # 2. Check Cache
       if (
@@ -1014,7 +1021,11 @@ log.save = T
         }
       } else {
         # CACHE MISS: Nieuw design
-        vars_to_select <- unique(c(base_vars_names, current_var_cols))
+        vars_to_select <- unique(c(
+          persistent_design_cols,
+          var,
+          colnames(data)[str_starts(colnames(data), paste0("dummy.", var))]
+        ))
         data.tmp <- data %>% select(any_of(vars_to_select))
 
         # nu wordt het ingewikkeld: in de monitor VO zijn verschillende weegfactoren nodig per jaar
@@ -1117,7 +1128,7 @@ log.save = T
 
       # Design weer schoonmaken voor volgende iteratie (geheugenmanagement)
       for (col in current_var_cols) {
-        if (!col %in% base_vars_names) {
+        if (!col %in% persistent_design_cols) {
           current_design$variables[[col]] <- NULL
         }
       }
