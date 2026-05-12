@@ -14,7 +14,7 @@ if(!(exists("skip_config_popup") && skip_config_popup)){
 label_problemen <- NULL
 # benodigde packages installeren als deze afwezig zijn
 pkg_nodig = c("tidyverse", "survey", "haven", "this.path", "textutils",
-              "labelled", "openxlsx", "knitr", "glue") # Glue toegevoegd voor kubusdata
+              "labelled", "openxlsx", "knitr", "glue")
 
 for (pkg in pkg_nodig) {
   if (system.file(package = pkg) == "") {
@@ -282,7 +282,7 @@ log.save = T
     }) %>% unlist() %>% unname()
   
   # in de sheet 'crossings' zijn twee mogelijke kolommen: varname van crossing, en 
-  # boolean voor toetsen van deze crossing. We splitsen deze voor backward compatability
+  # boolean voor toetsen van deze crossing. We splitsen deze voor backward compatibility
   if(length(crossings) == 0){ # scenario 1: een sheet met alleen 'crossings' in A1 (default)
     crossings_toetsen <- NULL
   } else if(is.null(colnames(crossings))){ # scenario 2: een sheet met 'crossings' in A1 en daaronder varnames
@@ -927,9 +927,9 @@ log.save = T
             basename(config.file), level=MSG)
         
         calc.results = F
-        # aangezien een tweede subset vaker kan draaien moeten we hier een distinct op doen - deze is tijdelijk nodig door een ontwerpfoutje
-        # deze functie werd eerst meerdere keren aangeroepen in tbl_MakeExcel, wat natuurlijk veel meer resources kost
-        # helaas zijn de resultaten die inmiddels opgeslagen zijn wel volgens de oude manier berekend, dus moeten we de correctie voor de zekerheid uitvoeren
+        # Bij hergebruik van cache kan dezelfde subset meer dan eens voorkomen.
+        # Daarom dedupliceren we resultaten hier als veiligheidsstap.
+        # Dit houdt oudere cachebestanden compatibel met de huidige berekeningsflow.
         results = results %>% distinct()
       }
     } else {
@@ -1355,7 +1355,7 @@ log.save = T
       for (s in 1:length(subsetvals)) {
         if (sum(results$subset == colnames(subsetmatches)[1] & results$subset.val == subsetvals[s], na.rm=T) < 1) next 
         
-        # Haal specifieke alpha voor deze subset op uit de MTC file
+        # Haal specifieke alpha voor deze subset op uit mtc_per_subset
         alpha_row = mtc_per_subset[!is.na(mtc_per_subset$subset) & mtc_per_subset$subset == colnames(subsetmatches)[1] & mtc_per_subset$subset.val == subsetvals[s], ]
         algemeen$confidence_level = if(nrow(alpha_row) > 0) alpha_row$corrected_alpha[1] else default_alpha
         
@@ -1381,7 +1381,7 @@ log.save = T
     for (s in 1:length(subsetvals)) {
       if (sum(results$subset == colnames(subsetmatches)[1] & results$subset.val == subsetvals[s], na.rm=T) < 1) next 
       
-      # Haal specifieke alpha voor deze subset op uit de MTC file
+      # Haal specifieke alpha voor deze subset op uit mtc_per_subset
       alpha_row = mtc_per_subset[!is.na(mtc_per_subset$subset) & mtc_per_subset$subset == colnames(subsetmatches)[1] & mtc_per_subset$subset.val == subsetvals[s], ]
       algemeen$confidence_level = if(nrow(alpha_row) > 0) alpha_row$corrected_alpha[1] else default_alpha
       
