@@ -1184,14 +1184,14 @@ log.save = T
   results = add_dichotoom_flags(results, dichotoom, niet_dichotoom, algemeen)
   results <- add_suppression_flags(results, algemeen, indeling_rijen)
 
+  mtc_method <- if ("multiple_testing_correction" %in% colnames(algemeen)) as.character(algemeen$multiple_testing_correction) else NA_character_
+  base_alpha <- if ("confidence_level" %in% colnames(algemeen)) as.numeric(algemeen$confidence_level) else NA_real_
+  mtc_requested <- !is.na(mtc_method)
+  has_sign_results <- "sign" %in% colnames(results) && any(!is.na(results$sign))
+
   # Multiple Testing Correctie (altijd opnieuw berekend, niet gecached)
-  if (
-    "multiple_testing_correction" %in%
-      colnames(algemeen) &&
-      !is.na(algemeen$multiple_testing_correction) &&
-      "sign" %in% colnames(results) &&
-      any(!is.na(results$sign))
-  ) {
+  if (mtc_requested && has_sign_results) {
+    mtc_applied <- TRUE
     # Stap 1: Identificeer de daadwerkelijk uitgevoerde tests per subset
     # - Voor dichotome variabelen: tel slechts één test per variabele per crossing
     # - Voor andere variabelen: tel unieke (var, crossing, antwoord) combinaties
@@ -1212,8 +1212,6 @@ log.save = T
 
     
     # MTC berekenen per subset
-    mtc_method <- algemeen$multiple_testing_correction
-    base_alpha <- algemeen$confidence_level
 
     if (grepl("bf|bonferonni|bonferroni", mtc_method, ignore.case = TRUE)) {
       mtc_per_subset <- n_sign_tests_per_subset |>
@@ -1271,6 +1269,7 @@ log.save = T
       level = MSG
     )
   } else {
+    mtc_applied <- FALSE
     mtc_per_subset <- data.frame(
       subset = character(),
       subset.val = numeric(),
@@ -1278,6 +1277,37 @@ log.save = T
       n_sign_tests = numeric()
     )
   }
+
+  # Sla de laatste alpha-stand op voor inzage
+  if (nrow(mtc_per_subset) > 0) {
+    mtc_export <- mtc_per_subset %>%
+      mutate(
+        run_timestamp = format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
+        config_file = basename(config.file),
+        mtc_method = mtc_method,
+        base_alpha = base_alpha,
+        mtc_applied = mtc_applied
+      ) %>%
+      select(run_timestamp, config_file, mtc_method, base_alpha, mtc_applied, subset, subset.val, n_sign_tests, corrected_alpha)
+  } else {
+    mtc_export <- data.frame(
+      run_timestamp = format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
+      config_file = basename(config.file),
+      mtc_method = mtc_method,
+      base_alpha = base_alpha,
+      mtc_applied = mtc_applied,
+      subset = NA_character_,
+      subset.val = NA_real_,
+      n_sign_tests = 0,
+      corrected_alpha = base_alpha
+    )
+  }
+  write.csv(
+    mtc_export,
+    sprintf("resultaten_csv/mtc_alphas_%s.csv", basename(config.file)),
+    fileEncoding = "UTF-8",
+    row.names = FALSE
+  )
   
   
   
