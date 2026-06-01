@@ -166,14 +166,6 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
   perc.rows = numeric(0)
   label.oversized.rows = numeric(0)
   
-  # constantes voor het vervangen van cellen met te weinig antwoorden
-  # dit is nodig omdat bij het direct plaatsen van tekst de hele matrix een karakter wordt
-  # dan werkt de weergave in procenten in Excel niet goed meer
-  A_TOOSMALL = -1
-  Q_TOOSMALL = -2
-  Q_MISSING = -3
-  A_EXACTZERO = -4
-  
   c = 1 # teller voor rijen in Excel
   
   # moet er introtekst bij?
@@ -289,6 +281,8 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
       
       # benodigde resultaten ophalen, zodat we niet steeds belachelijke selectors nodig hebben
       data.var = data.frame()
+      cols = c("var", "val", "crossing", "crossing.val", "sign", "sign.vs", "n.unweighted", "n_question", "perc.weighted", "suppression", "display_include", "is_dichotoom")
+      cols = cols[cols %in% colnames(results)]
       for (j in 1:nrow(col.design)) {
         if (!is.na(col.design$subset[j])) {
           subset.col = subset.val
@@ -300,18 +294,17 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
                                      NA.identical(results$year, col.design$year[j]) & NA.identical(results$crossing, col.design$crossing[j]) &
                                      NA.identical(results$crossing.val, col.design$crossing.val[j]) & NA.identical(results$sign.vs, col.design$test.col[j]) &
                                      results$var == indeling_rijen$inhoud[i]),
-                             c("val", "crossing", "crossing.val", "sign", "sign.vs", "n.unweighted", "perc.weighted")]
+                             cols, drop = FALSE]
           if (nrow(data.tmp) == 0) next
           data.tmp$col.index = j
           data.var = bind_rows(data.var, data.tmp)
-        }
-        else {
+        } else {
           data.tmp = results[which(NA.identical(results$dataset, col.design$dataset[j]) & NA.identical(results$subset, col.design$subset[j]) &
                                      is.na(results$subset.val) &
                                      NA.identical(results$year, col.design$year[j]) & NA.identical(results$crossing, col.design$crossing[j]) &
                                      NA.identical(results$crossing.val, col.design$crossing.val[j]) & NA.identical(results$sign.vs, col.design$test.col[j]) &
                                      results$var == indeling_rijen$inhoud[i]),
-                             c("val", "crossing", "crossing.val", "sign", "sign.vs", "n.unweighted", "perc.weighted")]
+                             cols, drop = FALSE]
           if (nrow(data.tmp) == 0) next
           data.tmp$col.index = j
           data.var = bind_rows(data.var, data.tmp)
@@ -351,33 +344,13 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
         if (!is.null(algemeen$weergave) && algemeen$weergave == "n")
           output[vals,j] = data.var$n[data.var$col.index == j & data.var$val %in% rownames(output)]
         
-        # waarden onder de afkapgrens vervangen
-        output[which(output[,j] == 0), j] = A_EXACTZERO
-        output[which(output[,j] <= algemeen$afkapwaarde_antwoord & output[,j] > 0) ,j] = A_TOOSMALL
-        
-        #PS:
-        #Metingen die o.b.v te lage aantallen zijn vervangen 
-        ongewogen_aantal <- data.var$n.unweighted[data.var$col.index == j]
-        if (!is.na(indeling_rijen$verberg_crossings[i]) && !is.na(col.design$crossing[j])) {
-          output[,j] = Q_MISSING
-        } else if (sum(ongewogen_aantal, na.rm=T) == 0) {
-          output[,j] = Q_MISSING
-        } else if (sum(ongewogen_aantal, na.rm=T) < algemeen$min_observaties_per_vraag) {
-          #Alle percentages wegstrepen als aantallen per groep te klein zijn.
-          output[,j] <- Q_TOOSMALL
-        } else if(any(ongewogen_aantal < algemeen$min_observaties_per_antwoord & ongewogen_aantal > 0, na.rm=T)) {
-          # Bij een cel met te weinig antwoorden zijn er twee opties:
-          # 1) De hele kolom verbergen, om herleidbaarheid te voorkomen.
-          # 2) Alleen die cel verbergen.
-          # De keuze hierin is discutabel, dus we laten het over aan de onderzoekers zelf.
-          if (algemeen$vraag_verbergen_bij_missend_antwoord) {
-            #Alle percentages wegstrepen als tenminste 1 van de aantallen per antwoord te klein is.
-            output[,j] <- A_TOOSMALL
-          }
-          else {
-            # alleen de cel wegstrepen
-            data.col = data.var[data.var$col.index == j & data.var$val %in% rownames(output),]
-            output[rownames(output) %in% data.col$val[which(data.col$n.unweighted < algemeen$min_observaties_per_antwoord)],j] <- A_TOOSMALL
+        # onderdrukking toepassen
+        # onderdrukking toepassen op basis van vooraf berekende suppression-kolom
+        data.col = data.var[data.var$col.index == j & data.var$val %in% rownames(output), ]
+        for (v in data.col$val) {
+          sup = data.col$suppression[data.col$val == v]
+          if (length(sup) > 0 && sup != 0) {
+            output[as.character(v), j] = sup
           }
         }
         
@@ -425,19 +398,7 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
       
       # dichotoom? zo ja, alleen 1 (= ja) laten zien en geen kop met de vraag
       # zo nee, kop met de vraag en alle waardes laten zien
-      levels.var = sort(as.numeric(unique(data.var$val)))
-      dichotoom.vals = algemeen$waarden_dichotoom %>% 
-        str_split("\\|") %>%
-        unlist() %>%
-        str_split(",") %>%
-        lapply(as.numeric)
-      
-      if (!indeling_rijen$inhoud[i] %in% niet_dichotoom &&
-          (indeling_rijen$inhoud[i] %in% dichotoom ||
-           isTRUE(all.equal(levels.var, c(0, 1))) ||
-           isTRUE(all.equal(levels.var, c(0))) ||
-           isTRUE(all.equal(levels.var, c(1))) ||
-           any(unlist(lapply(dichotoom.vals, function (x) { return(identical(x, levels.var)) }))))) {
+      if (any(data.var$is_dichotoom, na.rm = TRUE)) {
         output = output %>% as.data.frame() %>% rownames_to_column("val") %>% filter(val == 1) %>%
           mutate(label=var_labels$label[var_labels$var == indeling_rijen$inhoud[i] & var_labels$val == "var"],
                  matchcode=paste0(indeling_rijen$inhoud[i], val)) %>%
@@ -538,7 +499,7 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
           val = algemeen$tekst_missende_data
           if (as.numeric(replacement$val[i]) == Q_TOOSMALL) val = algemeen$tekst_min_vraag_niet_gehaald
           if (as.numeric(replacement$val[i]) == A_TOOSMALL) val = algemeen$tekst_min_antwoord_niet_gehaald
-          if (as.numeric(replacement$val[i]) == A_EXACTZERO) val = "0"
+          if (as.numeric(replacement$val[i]) == A_EXACTZERO) val = 0
           writeData(wb, subset.name, val, startCol=replacement$col[i], startRow=c+replacement$row[i]-1, colNames=F)
         }
       }

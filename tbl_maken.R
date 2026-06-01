@@ -14,7 +14,7 @@ if(!(exists("skip_config_popup") && skip_config_popup)){
 label_problemen <- NULL
 # benodigde packages installeren als deze afwezig zijn
 pkg_nodig = c("tidyverse", "survey", "haven", "this.path", "textutils",
-              "labelled", "openxlsx", "knitr")
+              "labelled", "openxlsx", "knitr", "glue")
 
 for (pkg in pkg_nodig) {
   if (system.file(package = pkg) == "") {
@@ -30,6 +30,7 @@ library(textutils)
 library(labelled)
 library(openxlsx)
 library(knitr)
+library(glue)
 
 # instellen werkmap voor het laden van de andere bestanden
 setwd(dirname(this.path()))
@@ -83,8 +84,20 @@ log.save = T
   # daadwerkelijk inlezen configuratie
   # TODO: onmogelijke waardes checken
   sheets = c("algemeen", "crossings", "datasets", "indeling_rijen", "onderdelen", "opmaak", "labelcorrectie", "logos", "intro_tekst", "headers_afkortingen",
-             "dichotoom", "niet_dichotoom", "forceer_datatypen")
+             "dichotoom", "niet_dichotoom", "forceer_datatypen", "swing_configuraties", "swing_variabelen", "swing_crossings")
+  
+  available_sheets <- getSheetNames(config.file)
+  
   for (sheet in sheets) {
+    if (!sheet %in% available_sheets) {
+      if (sheet %in% c("swing_configuraties", "swing_variabelen", "swing_crossings")) {
+        msg("Tabblad %s bestaat niet in het configuratiebestand. Dit kan door een fout komen of omdat je met een oude configuratiebestand werkt. De functionaliteit uit dit tabblad wordt waar mogelijk overgeslagen.", sheet, level = WARN)
+      } else {
+        msg("Tabblad %s bestaat niet in het configuratiebestand. Voeg deze toe volgens de specificaties in de handleiding.", sheet, level = ERR)
+      }
+      next
+    }
+    
     tmp = read.xlsx(config.file, sheet=sheet)
     
     # om de configuratielast te verlichten is het mogelijk om tabbladen over te erven uit andere configuraties
@@ -197,6 +210,55 @@ log.save = T
     opmaak = rbind(opmaak, data.frame(type="naam_tabellenboek", waarde="Overzicht"))
   }
   
+  # swing verwerking is later toegevoegd, dus uit gaan van niet bij geen waarde
+  if (!"swing_output" %in% colnames(algemeen)) {
+    algemeen$swing_output <- FALSE
+    msg("Er is geen kolom met de naam 'swing_output' aanwezig in algemeen. Standaardinstelling (ONWAAR) wordt aangenomen.", level=WARN)
+  } else {
+    algemeen$swing_output[is.na(algemeen$swing_output)] = FALSE
+  }
+  
+  # Als swing output wel gemaakt wordt, moeten we nog een aantal dingen checken en aanvullen:
+  if (algemeen$swing_output) {
+    if (any(!c("swing_configuraties", "swing_variabelen", "swing_crossings") %in% available_sheets)) {
+      msg("Er is aangegeven dat er een swing output gemaakt moet worden, maar de benodigde tabbladen swing_configuraties, swing_variabelen, en swing_crossings zijn niet allemaal aanwezig. Controleer de configuratie.", level=ERR)
+    }
+    
+    if (!"swing_output_bestandsnaam" %in% colnames(algemeen) || is.na(algemeen$swing_output_bestandsnaam)) {
+      algemeen$swing_output_bestandsnaam <- "kubusdata"
+      msg("Er is geen naam voor het swing/platte_kubus output bestand gegeven. Standaardnaam ('kubusdata') wordt aangenomen.", level=WARN)
+    }
+    
+    if (!"swing_afkapwaarde" %in% colnames(algemeen)) {
+      algemeen$swing_afkapwaarde <- NA
+    }
+    
+    if (!"swing_unit" %in% colnames(algemeen)) {
+      algemeen$swing_unit <- NA
+    }
+    
+    # Swing_configuraties$gebiedsniveau mag niet leeg zijn
+    if (any(is.na(swing_configuraties$gebiedsniveau))) {
+      msg("In tabblad swing_configuraties is het gebiedsniveau niet ingevuld op rij(s) %s. Vul dit in, dit is verplicht voor swing analyses.",
+          str_c(which(is.na(swing_configuraties$gebiedsniveau)), collapse=", "), level=ERR)
+    }
+    
+    # Swing_configuratie tbl_dataset toevoegen als rijnummer van datasets,
+    # om dit later te kunnen gebruiken bij het bouwen van de swing data als filter
+    # (Alternatief zou zijn de dataset_naam aan data toe te voegen)
+    replace_empty_with_na <- function(x) {if (length(x) == 0) return(NA_integer_) else return(x)}
+    swing_configuraties <- swing_configuraties |> 
+      rowwise() |> 
+      mutate(
+        tbl_dataset = replace_empty_with_na(which(datasets$naam_dataset == naam_dataset))
+      ) |> 
+      ungroup()
+    
+    swing_configuraties <- left_join(swing_configuraties, datasets, by = "naam_dataset")
+    
+  }
+  
+  
   # variabelelijst afleiden uit de indeling van het tabellenboek;
   # iedere regel met (n)var is een variabele die we nodig hebben
   varlist = indeling_rijen[indeling_rijen$type %in% c("var", "nvar"),]
@@ -216,7 +278,7 @@ log.save = T
     }) %>% unlist() %>% unname()
   
   # in de sheet 'crossings' zijn twee mogelijke kolommen: varname van crossing, en 
-  # boolean voor toetsen van deze crossing. We splitsen deze voor backward compatability
+  # boolean voor toetsen van deze crossing. We splitsen deze voor backward compatibility
   if(length(crossings) == 0){ # scenario 1: een sheet met alleen 'crossings' in A1 (default)
     crossings_toetsen <- NULL
   } else if(is.null(colnames(crossings))){ # scenario 2: een sheet met 'crossings' in A1 en daaronder varnames
@@ -229,7 +291,7 @@ log.save = T
   } else{
     msg("Geen kloppend tabblad crossings. Deze moet bestaan uit één of twee kolommen; crossings en (optioneel) toetsen. Standaard is 'crossings' in cel A1 en verder een lege sheet. Voor meer informatie zie documentatie.", level=ERR)
   }
-
+  
   if (any(crossings %in% onderdelen$subset)) {
     msg("De variabele(n) %s is/zijn ingevuld als crossing en subset. Een subset kan niet met zichzelf gekruist worden.",
         str_c(crossings[crossings %in% onderdelen$subset], ", "), level=WARN)
@@ -543,7 +605,7 @@ log.save = T
   for (d in 1:nrow(datasets)) {
     dataset_indexes = which(data$tbl_dataset == d) # welke kolommen in data gaan over dataset d, 'mijn kolommen'?
     strata = data$superstrata[dataset_indexes] # wat zijn de strata van mijn kolommen?
-    unique_strata = sort(unique(strata)) # unique strata
+    unique_strata = sort(unique(strata)) 
     if("fpc" %in% colnames(datasets) && !is.na(datasets$fpc[d])){
       if(is.na(datasets$stratum[d])){stop("Bij FPC is het verplicht een stratum op te geven.")}
       fpc_data <- table(strata) %>%
@@ -552,11 +614,11 @@ log.save = T
         rename(stratum = strata)
       if(file.exists(datasets$fpc[d])){
         # als het een pad is: zoek de fpc data op en berekenen sampling prob per stratum
-          fpc_data <- fpc_data %>% left_join(
+        fpc_data <- fpc_data %>%
+          left_join(
             read.xlsx(datasets$fpc[d]) %>% 
               mutate(stratum = as.factor(stratum)),
-            join_by(stratum == stratum)
-          ) %>% 
+            by="stratum") %>% 
           mutate(fpc = populatiegrootte)
       } else if(grepl("GROOTGEWICHT_", datasets$fpc[d])){
         if(is.na(datasets$stratum[d])){stop("Bij FPC is het verplicht een stratum op te geven.")}
@@ -570,9 +632,7 @@ log.save = T
               summarise(populatiegrootte = sum(!!sym(gsub("GROOTGEWICHT_", "", datasets$fpc[d])), na.rm = TRUE)), 
             join_by(stratum == superstrata)
           ) %>% 
-          mutate(
-            fpc = populatiegrootte
-          )
+          mutate(fpc = populatiegrootte)
         
       } else if(datasets$fpc[d] %in% colnames(data)){
         # als de fpc correctiefactor gewoon een kolom is, dan die overnemen
@@ -582,12 +642,8 @@ log.save = T
         msg("FPC is aangegeven maar onbekende FPC kolom input '%s'. Zie handleiding voor opties.", datasets$fpc[d], level=ERR)
       }
       # merge zodat we voor elke respondent een sampling prob hebben
-      fpc_per_respondent <- data.frame(
-        stratum = strata
-      ) %>% left_join(
-        fpc_data,
-        join_by(stratum == stratum)
-      )
+      fpc_per_respondent <- data.frame(stratum = strata) %>%
+        left_join(fpc_data, by="stratum")
       is_small_strata <- fpc_per_respondent$Freq >= fpc_per_respondent$populatiegrootte
       if(any(is.na(fpc_per_respondent$stratum))){
         msg("Er bevinden zich %s respondenten met een missend strata in de dataset. Deze worden niet meegenomen in de weging.", sum(is.na(fpc_per_respondent$stratum)), level=MSG)
@@ -596,11 +652,11 @@ log.save = T
         msg("Er bevinden zich kleine strata in de data waarvoor de geschatte populatiegrootte kleiner is dan aantal respondenten. Er wordt nu aangenomen dat de populatiegrootte hier gelijk is aan aantal respondenten. Het gaat om:", level=MSG)
         fpc_per_respondent <- fpc_per_respondent %>% 
           mutate(
-          fpc = case_when(
-            fpc < Freq ~ Freq,
-            T ~ fpc
+            fpc = case_when(
+              fpc < Freq ~ Freq,
+              T ~ fpc
+            )
           )
-        )
         print(fpc_per_respondent[is_small_strata,])
       }
       
@@ -732,7 +788,8 @@ log.save = T
   # dummyvariabelen maken voor iedere kolom
   # dit is nodig om later een chi square uit te kunnen voeren over een vergelijkingsset, omdat survey pure pijn is
   # daarnaast maken we van het moment gebruik om de aantallen even op te slaan
-  n_resp = data.frame()
+  n_resp_list <- vector("list", nrow(kolom_opbouw) * 2)
+  n_resp_idx <- 1
   for (i in 1:nrow(kolom_opbouw)) {
     kolom = data$tbl_dataset == kolom_opbouw$dataset[i]
     # scheiden per jaar?
@@ -746,13 +803,14 @@ log.save = T
     
     data[,paste0("dummy._col", i)] = kolom
     
-    n_resp = bind_rows(n_resp, data.frame(col=i, year=kolom_opbouw$year[i], crossing=kolom_opbouw$crossing[i], n=sum(kolom, na.rm=T)))
+    n_resp_list[[n_resp_idx]] <- data.frame(col=i, year=kolom_opbouw$year[i], crossing=kolom_opbouw$crossing[i], n=sum(kolom, na.rm=T))
+    n_resp_idx <- n_resp_idx + 1
     
     # ook splitsen per subset?
     if (!is.na(kolom_opbouw$subset[i])) {
       subsetvals = val_labels(data[[kolom_opbouw$subset[i]]])
       if (is.null(subsetvals))
-        msg("In kolom %d wordt gesplitst op subset %s, maar deze variabele heeft geen labels in de dataset. Hierdoor kunnen de resultaten niet worden berekend. Voeg labels toe aan de dataset, of pas de kolomindeling aan op het tabblad onderdelen.",
+        msg("In kolom %d wordt gesplitst op subset %s, maar deze variabele heeft geen labels in de dataset. Hierdoor kunnen de resultaten niet worden berekend. Voeg labels toe aan de dataset, of verwijder de subset.",
             i, kolom_opbouw$subset[i], level=ERR)
       
       for (val in subsetvals) {
@@ -760,10 +818,16 @@ log.save = T
         if (sum(subset, na.rm=T) <= 0) next # als er geen data bestaat voor die subset is het een beetje nutteloos
         data[,paste0("dummy._col", i, ".s.", unname(val))] = subset
         
-        n_resp = bind_rows(n_resp, data.frame(col=i, year=kolom_opbouw$year[i], crossing=kolom_opbouw$crossing[i], subset=val, n=sum(subset, na.rm=T)))
+        if (n_resp_idx > length(n_resp_list)) {
+          length(n_resp_list) <- length(n_resp_list) * 2
+        }
+        n_resp_list[[n_resp_idx]] <- data.frame(col=i, year=kolom_opbouw$year[i], crossing=kolom_opbouw$crossing[i], subset=val, n=sum(subset, na.rm=T))
+        n_resp_idx <- n_resp_idx + 1
       }
     }
   }
+  n_resp <- bind_rows(n_resp_list[seq_len(n_resp_idx - 1)])
+  rm(n_resp_list)
   # het kan voorkomen dat geen van de kolommen een subset hebben, maar hier wordt in latere functies wel gebruik van gemaakt... indien missend, voeg toe
   if (!"subset" %in% colnames(n_resp)) {
     n_resp$subset = NA
@@ -854,12 +918,11 @@ log.save = T
             basename(config.file), level=MSG)
         
         calc.results = F
-        # aangezien een tweede subset vaker kan draaien moeten we hier een distinct op doen - deze is tijdelijk nodig door een ontwerpfoutje
-        # deze functie werd eerst meerdere keren aangeroepen in tbl_MakeExcel, wat natuurlijk veel meer resources kost
-        # helaas zijn de resultaten die inmiddels opgeslagen zijn wel volgens de oude manier berekend, dus moeten we de correctie voor de zekerheid uitvoeren
+        # Bij hergebruik van cache kan dezelfde subset meer dan eens voorkomen.
+        # Daarom dedupliceren we resultaten hier als veiligheidsstap.
+        # Dit houdt oudere cachebestanden compatibel met de huidige berekeningsflow.
         results = results %>% distinct()
       }
-      
     } else {
       msg("Er zijn eerdere resultaten aangetroffen vanuit deze configuratie (%s), maar de instellingen waren niet identiek. Berekening wordt opnieuw uitgevoerd.", basename(config.file), level=MSG)
     }
@@ -867,163 +930,269 @@ log.save = T
   
   if (calc.results) {
     source(paste0(dirname(this.path()), "/tbl_GetTableRow.R"))
-    results = data.frame()
+    
+    results_list = list()
     t.start = proc.time()["elapsed"]
     t.vars = c()
+    
+    # svydesign() neemt bizar veel tijd in beslag, maar doet eigenlijk niet veel.
+    # Deze kunnen we hergebruiken; je hoeft alleen de variabelen aan te passen en de weights te veranderen.
+    design = NULL
+
+    # Kolommen die persistent in current_design moeten blijven voor cache hits.
+    persistent_design_cols <- c(kolom_opbouw$crossing, kolom_opbouw$subset, colnames(data)[str_starts(colnames(data), "dummy._col")],
+      "superstrata", "superweegfactor", "fpc", "tbl_dataset") %>% unique()
+    persistent_design_cols <- persistent_design_cols[!is.na(persistent_design_cols)]
+
+    # Weegfactor logica voorbereiden
+    has_weight_logic <- any(str_detect(colnames(varlist), "weegfactor"))
+    if (has_weight_logic) {
+      # tijd om te huilen
+      # mogelijke opties:
+      # "weegfactor" -> override voor die variabele
+      # "weegfactor.d[getal]" -> override voor die variabele in dataset[getal]
+      # "weegfactor.d_[naam]" -> override voor die variabele in dataset[naam]
+      weegfactorvars = str_match(colnames(varlist), "weegfactor(.*)")
+      weegfactorvars = matrix(weegfactorvars[!is.na(weegfactorvars[, 1]), ],
+                              ncol = 2) # het moet via een matrix met 2 kolommen, omdat R anders een enkele rij omzet naar een vector
+    }
+
     for (i in 1:nrow(varlist)) {
       var = varlist$inhoud[i]
-      
+
       if (!var %in% colnames(data)) {
         msg("Variabele %s is wel opgegeven in indeling_rijen, maar komt niet voor in de dataset. Controleer de configuratie.", var, level=WARN)
         next
       }
       
-      # we kunnen de dataset die de functie in moet flink verkleinen; alle variabelen
-      # behalve [var], dummy._col[1:n], dummy.[var], de subsets en de crossings kunnen eruit
-      vars = c(var, kolom_opbouw$crossing, kolom_opbouw$subset, colnames(data)[str_starts(colnames(data), "dummy._col")],
-               colnames(data)[str_starts(colnames(data), paste0("dummy.", var))], "superstrata", "superweegfactor", "fpc",
-               "tbl_dataset", weight.factors)
-      vars = unique(vars[!is.na(vars)])
-      data.tmp = data %>% select(any_of(vars))
-      
-      # nu wordt het ingewikkeld: in de monitor VO zijn verschillende weegfactoren nodig per jaar
-      # dit betekent dat we per variabele EN per dataset een andere weegfactor kunnen hebben
-      # daarvoor kan een combinatieweegfactor gemaakt worden, als er gewerkt wordt met één groot combinatiebestand,
-      # of er kan een 'superweegfactor' gemaakt worden, gelijkend aan de superweegfactor die door combinatie hierboven ontstaan is
-      # aangezien niet alle GGD'en een overkoepelend bestand hebben is hier gekozen voor de tweede optie
-      # gezien de complexiteit wordt deze code lelijk, daar is helaas weinig aan te doen
-      
-      if (any(str_detect(colnames(varlist), "weegfactor"))) {
-        # tijd om te huilen
-        # mogelijke opties:
-        # "weegfactor" -> override voor die variabele
-        # "weegfactor.d[getal]" -> override voor die variabele in dataset [getal]
-        # "weegfactor.d_[naam]" -> override voor die variabele in dataset [naam]
-        weegfactorvars = str_match(colnames(varlist), "weegfactor(.*)")
-        weegfactorvars = matrix(weegfactorvars[!is.na(weegfactorvars[,1]),], ncol=2) # het moet via een matrix met 2 kolommen, omdat R anders een enkele rij omzet naar een vector
-        
+      # Weegfactoren meenemen, indien nodig.
+      superweegfactor = data$superweegfactor
+      if (has_weight_logic) {
+        # nu wordt het ingewikkeld: in de monitor VO zijn verschillende weegfactoren nodig per jaar
+        # dit betekent dat we per variabele EN per dataset een andere weegfactor kunnen hebben
+        # daarvoor kan een combinatieweegfactor gemaakt worden, als er gewerkt wordt met één groot combinatiebestand,
+        # of er kan een 'superweegfactor' gemaakt worden, gelijkend aan de superweegfactor die door combinatie hierboven ontstaan is
+        # aangezien niet alle GGD'en een overkoepelend bestand hebben is hier gekozen voor de tweede optie
+        # gezien de complexiteit wordt deze code lelijk, daar is helaas weinig aan te doen
         for (j in 1:nrow(weegfactorvars)) {
-          wfname = weegfactorvars[j,1]
-          wfdataset = weegfactorvars[j,2]
+          wfname = weegfactorvars[j, 1]
+          wfdataset = weegfactorvars[j, 2]
           
           if (wfname == "weegfactor" && !is.na(varlist$weegfactor[i])) {
-            data.tmp$superweegfactor = data.tmp[[varlist$weegfactor[i]]]
-          } else if (!is.na(varlist[[wfname]][i]) && str_detect(wfdataset, "^\\.d(\\d+)$")) { # numeriek, dus d[getal]
-            dataset = as.numeric(str_match(wfdataset, "(\\d+)")[,2])
-            data.tmp$superweegfactor[data.tmp$tbl_dataset == dataset] = data.tmp[[varlist[[wfname]][i]]][data.tmp$tbl_dataset == dataset]
-          } else if (!is.na(varlist[[wfname]][i]) && str_detect(wfdataset, "^\\.d_(.+)")) { # naam van een dataset
-            dataset = str_match(wfdataset, "^\\.d_(.+)")[,2]
+            superweegfactor = data[[varlist$weegfactor[i]]]
+          } else if (!is.na(varlist[[wfname]][i]) && str_detect(wfdataset, "^\\.d(\\d+)$")) {
+            # numeriek, dus d[getal]
+            dataset = as.numeric(str_match(wfdataset, "(\\d+)")[, 2])
+            superweegfactor[data$tbl_dataset == dataset] = data[[varlist[[wfname]][i]]][data$tbl_dataset == dataset]
+          } else if (!is.na(varlist[[wfname]][i]) && str_detect(wfdataset, "^\\.d_(.+)")) {
+            # naam van een dataset
+            dataset = str_match(wfdataset, "^\\.d_(.+)")[, 2]
             if (!dataset %in% datasets$naam_dataset) {
-              msg("Er is een weegfactor opgegeven in indeling_rijen voor dataset %s, maar deze dataset is niet bekend. Controleer de configuratie.", dataset, level=ERR)
+              msg("Er is een weegfactor opgegeven in indeling_rijen voor dataset %s, maar deze dataset is niet bekend. Controleer de configuratie.",
+                  dataset, level = ERR)
             }
             dataset = which(datasets$naam_dataset == dataset)
-            data.tmp$superweegfactor[data.tmp$tbl_dataset == dataset] = data.tmp[[varlist[[wfname]][i]]][data.tmp$tbl_dataset == dataset]
+            superweegfactor[data$tbl_dataset == dataset] = data[[varlist[[wfname]][i]]][data$tbl_dataset == dataset]
           } else if (!is.na(varlist[[wfname]][i])) {
-            msg("Onbekende weegfactordefinitie opgegeven: %s. Controleer de configuratie.", wfname, level=ERR)
+            msg("Onbekende weegfactordefinitie opgegeven: %s. Controleer de configuratie.",
+                wfname, level = ERR)
           }
         }
       }
-
-      # aanmaken van design, afhankelijk van of er fpc is.
-      if("fpc" %in% colnames(datasets)){
-        design = svydesign(ids=~1, strata=~superstrata, weights=~superweegfactor, fpc=~fpc, data=data.tmp)  
+      
+      # svydesign() blijkt eigenlijk niet veel aan te passen aan de ingevoerde data. Enige relevante bewerking:
+      # probs <- as.data.frame(1/as.matrix(weights))
+      # rval$prob <- apply(probs, 1, prod)
+      # rval$allprob <- probs
+      # Dit betekent dat we het object kunnen hergebruiken, wat veel rekenkracht scheelt.
+      # Hiervoor moeten we dan de variabelen aanpassen en de probs berekenen.
+      
+      if (!is.null(design)) {
+        probs = as.data.frame(1/as.matrix(superweegfactor))
+        design$allprob = probs
+        design$prob = apply(probs, 1, prod)
+        design$variables[[var]] = data[[var]]
+        
+        # oude variabelen opruimen, en nieuwe toevoegen
+        indexes = which(!colnames(design$variables) %in% persistent_design_cols)
+        design$variables = cbind(design$variables[, -indexes], data[, c(var, colnames(data)[str_starts(colnames(data), paste0("dummy.", var))])])
       } else {
-        design = svydesign(ids=~1, strata=~superstrata, weights=~superweegfactor, data=data.tmp)
+        vars_to_select <- unique(c(persistent_design_cols, var, colnames(data)[str_starts(colnames(data), paste0("dummy.", var))]))
+        data.tmp <- data %>% select(any_of(vars_to_select))
+      
+        # aanmaken van design, afhankelijk van of er fpc is.
+        if ("fpc" %in% colnames(datasets)) {
+          design = svydesign(ids = ~1, strata = ~superstrata, weights = ~superweegfactor, fpc = ~fpc, data = data.tmp)
+        } else {
+          design = svydesign(ids = ~1, strata = ~superstrata, weights = ~superweegfactor, data = data.tmp)
+        }
+        
+        rm(data.tmp)
       }
-      
-      
+
       t.before = proc.time()["elapsed"]
-      results = bind_rows(results, GetTableRow(var, design, kolom_opbouw, subsetmatches))
+      results_list[[i]] = GetTableRow(var, design, kolom_opbouw, subsetmatches)
       t.after = proc.time()["elapsed"]
-      t.vars = c(t.vars, t.after-t.before)
-      
-      msg("Variabele %d/%d berekend; rekentijd %0.1f sec.", i, nrow(varlist), t.after-t.before, level=MSG)
+      t.vars = c(t.vars, t.after - t.before)
+
+      msg("Variabele %d/%d berekend; rekentijd %0.1f sec.",
+        i, nrow(varlist), t.after - t.before, level = MSG)
     }
+
+    results = bind_rows(results_list)
+    rm(results_list)
     t.end = proc.time()["elapsed"]
     msg("Totale rekentijd %0.2f min voor %d variabelen. Gemiddelde tijd per variabele was %0.1f sec (range %0.1f - %0.1f).",
-        (t.end-t.start)/60, nrow(varlist), mean(t.vars), min(t.vars), max(t.vars), level=MSG)
-    
-    # aangezien een tweede subset vaker kan draaien moeten we hier een distinct op doen
+      (t.end - t.start) / 60, nrow(varlist), mean(t.vars), min(t.vars), max(t.vars), level = MSG)
+
     results = results %>% distinct()
-    
+
     # resultaten opslaan voor hergebruik
-    # N.B.: alles in UTF-8 om problemen met een trema o.i.d. te voorkomen
-    write.csv(varlist, sprintf("resultaten_csv/vars_%s.csv", basename(config.file)), fileEncoding="UTF-8", row.names=F)
-    write.csv(var_labels, sprintf("resultaten_csv/varlabels_%s.csv", basename(config.file)), fileEncoding="UTF-8", row.names=F)
-    write.csv(kolom_opbouw, sprintf("resultaten_csv/settings_%s.csv", basename(config.file)), fileEncoding="UTF-8", row.names=F)
-    write.csv(results, sprintf("resultaten_csv/results_%s.csv", basename(config.file)), fileEncoding="UTF-8", row.names=F)
-    write.csv(fpc_data, sprintf("resultaten_csv/fpc_%s.csv", basename(config.file)), fileEncoding="UTF-8", row.names=F)
+    # N.B.: onderdrukkingsvlaggen en MTC worden bewust NIET gecached,
+    # zodat wijzigingen in afkapwaardes en correctiemethode altijd effect hebben.
+    write.csv(varlist, sprintf("resultaten_csv/vars_%s.csv", basename(config.file)),
+      fileEncoding = "UTF-8", row.names = F)
+    write.csv(var_labels, sprintf("resultaten_csv/varlabels_%s.csv", basename(config.file)),
+      fileEncoding = "UTF-8", row.names = F)
+    write.csv(kolom_opbouw, sprintf("resultaten_csv/settings_%s.csv", basename(config.file)),
+      fileEncoding = "UTF-8", row.names = F)
+    write.csv(results, sprintf("resultaten_csv/results_%s.csv", basename(config.file)),
+      fileEncoding = "UTF-8", row.names = F)
+    write.csv(fpc_data, sprintf("resultaten_csv/fpc_%s.csv", basename(config.file)),
+      fileEncoding = "UTF-8", row.names = F)
   }
+  
+  # Bereken dichotoom- en onderdrukkingsvlaggen op basis van actuele configuratie.
+  # Staat bewust NA het cachen van results zodat configuratiewijzigingen altijd effect hebben.
+  results = add_dichotoom_flags(results, dichotoom, niet_dichotoom, algemeen)
+  results = add_suppression_flags(results, algemeen, indeling_rijen)
+
+  mtc_method <- if ("multiple_testing_correction" %in% colnames(algemeen)) as.character(algemeen$multiple_testing_correction) else NA_character_
+  base_alpha <- if ("confidence_level" %in% colnames(algemeen)) as.numeric(algemeen$confidence_level) else NA_real_
+  has_sign_results <- "sign" %in% colnames(results) && any(!is.na(results$sign))
+
+  # Multiple Testing Correctie (altijd opnieuw berekend, niet gecached)
+  if (!is.na(mtc_method) && has_sign_results) {
+    mtc_applied <- TRUE
+    # Stap 1: Identificeer de daadwerkelijk uitgevoerde tests per subset
+    # - Voor dichotome variabelen: tel slechts één test per variabele per crossing
+    # - Voor andere variabelen: tel unieke (var, crossing, antwoord) combinaties
+    # - Tel de testen op totaalkolommen op basis van kolom_opbouw
+    n_sign_tests <- count_tests(
+      results,
+      algemeen,
+      crossings_toetsen,
+      indeling_rijen,
+      dichotoom,
+      niet_dichotoom
+    )
+    
+   # Stap 2: Tel tests per subset
+    n_sign_tests_per_subset = n_sign_tests %>%
+      group_by(subset, subset.val) %>%
+      summarize(n_sign_tests = sum(n_sign_tests), .groups = 'drop')
+
+    
+    # MTC berekenen per subset
+
+    if (grepl("bf|bonferonni|bonferroni", mtc_method, ignore.case = TRUE)) {
+      mtc_per_subset <- n_sign_tests_per_subset |>
+        mutate(
+          corrected_alpha = ifelse(
+            n_sign_tests > 0,
+            base_alpha / n_sign_tests,
+            base_alpha
+          )
+        )
+    } else if (grepl("bh|benjamini|hochberg", mtc_method, ignore.case = TRUE)) {
+      # BH heeft de daadwerkelijke p-waardes nodig
+      mtc_per_subset <- n_sign_tests_per_subset |>
+        rowwise() |>
+        mutate(
+          corrected_alpha = {
+            # Haal p-waardes op voor deze subset
+            pvals <- results |>
+              filter((is.na(subset) & is.na(.env$subset)) | (!is.na(subset) & subset == .env$subset),
+                (is.na(subset.val) & is.na(.env$subset.val)) | (!is.na(subset.val) & subset.val == .env$subset.val),
+                !is.na(sign)) |>
+              pull(sign) |>
+              sort()
+
+            if (length(pvals) > 0 && n_sign_tests > 0) {
+              ranks <- seq_along(pvals)
+              thresholds <- (ranks / n_sign_tests) * base_alpha
+              significant <- which(pvals <= thresholds)
+              if (length(significant) > 0) max(pvals[significant]) else 1e-20
+            } else {
+              1e-20
+            }
+          }
+        ) |>
+        ungroup()
+    } else {
+      msg("Onbekende multiple testing correctie methode: %s. Geen correctie toegepast.",
+        mtc_method, level = WARN)
+      mtc_per_subset <- n_sign_tests_per_subset |>
+        mutate(corrected_alpha = base_alpha)
+    }
+
+    msg("Multiple Testing Correctie (%s) is berekend per subset.",
+      mtc_method, level = MSG)
+  } else {
+    mtc_applied <- FALSE
+    mtc_per_subset <- data.frame(
+      subset = character(),
+      subset.val = numeric(),
+      corrected_alpha = numeric(),
+      n_sign_tests = numeric()
+    )
+  }
+
+  # Sla de laatste alpha-stand op voor inzage
+  if (nrow(mtc_per_subset) > 0) {
+    mtc_export <- mtc_per_subset %>%
+      mutate(
+        run_timestamp = format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
+        config_file = basename(config.file),
+        mtc_method = mtc_method,
+        base_alpha = base_alpha,
+        mtc_applied = mtc_applied
+      ) %>%
+      select(run_timestamp, config_file, mtc_method, base_alpha, mtc_applied, subset, subset.val, n_sign_tests, corrected_alpha)
+  } else {
+    mtc_export <- data.frame(
+      run_timestamp = format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
+      config_file = basename(config.file),
+      mtc_method = mtc_method,
+      base_alpha = base_alpha,
+      mtc_applied = mtc_applied,
+      subset = NA_character_,
+      subset.val = NA_real_,
+      n_sign_tests = 0,
+      corrected_alpha = base_alpha
+    )
+  }
+  write.csv(
+    mtc_export,
+    sprintf("resultaten_csv/mtc_alphas_%s.csv", basename(config.file)),
+    fileEncoding = "UTF-8",
+    row.names = FALSE
+  )
+  
+  
+  
+  # Kubusdata generatie (Swing)
+  source(paste0(dirname(this.path()), "/tbl_MakeKubus.R"))
+  if (algemeen$swing_output) {
+    MaakKubusData(data = data,
+                  configuraties = swing_configuraties,
+                  variabelen = swing_variabelen,
+                  crossings = swing_crossings)
+  }
+  
   
   ##### begin wegschrijven tabellenboeken
   basefilename = coalesce(opmaak$waarde[opmaak$type == "naam_tabellenboek"], "Overzicht")
-  
-  # multiple testing correctie, indien gewenst
-  # normaliter zou je hiervoor p.adjust() kunnen gebruiken, maar er is een probleem;
-  # doordat we een rij hebben per losse waarde en per crossingwaarde krijg je een artificieel hoog aantal testen, wat niet daadwerkelijk zo is
-  # ter voorbeeld: stel dat er 1 crossing is (man/vrouw) voor een vraag met 3 antwoorden, dan zijn er totaal 6 p-waardes; A1 m/v, A2 m/v, A3 m/v (A = antwoord)
-  # dit registreert in p.adjust() dan als 6 testen, terwijl er in de realiteit 3 zijn uitgevoerd; A1 m vs. v, A2 m vs. v, A3 m vs. v
-  # we moeten dus terugrekenen hoeveel testen er daadwerkelijk zijn uitgevoerd
-  # concreet betekent dit:
-  # -> voor iedere rij waarin sign.vs != NA (want anders is er sowieso geen toets uitgevoerd)
-  # -> deel door aantal crossings, indien aanwezig
-  # -> deel door 2 indien dichotoom (makkelijk te herkennen aan precies 2 antwoordmogelijkheden en gelijke p-waarde)
-  # dit is met p.adjust() lastig te corrigeren, dus in plaats daarvan kunnen we gewoon de gewenste p-waarde aanpassen
-  # stiekem overschrijven we algemeen$confidence_level dan met de gecorrigeerde afkapwaarde
-  if("multiple_testing_correction" %in% colnames(algemeen) && !is.na(algemeen$multiple_testing_correction) && !"confidence_level_orig" %in% colnames(algemeen)) {
-    # om te voorkomen dat deze berekening 2x gedaan wordt
-    algemeen$confidence_level_orig = algemeen$confidence_level
-    
-    sign_indexes = !is.na(results$sign.vs)
-    sign_tests = results[sign_indexes,] %>%
-      group_by(subset, subset.val, year, crossing, crossing.val, var, sign.vs, sign) %>%
-      summarize(n=n()) %>%
-      group_by(subset, subset.val, year, crossing, var, sign.vs, sign) %>%
-      summarize(n_total=sum(n), crossing_n=n(), n=n_total/crossing_n)
-    # op dit punt hebben we een tabel met precies de uitgevoerde toetsen;
-    # - crossings hebben een n_total van [aantal antwoordmogelijkheden * aantal crossings] en een n van [aantal antwoordmogelijkheden]
-    # - dichotome variabelen hebben een n van 2 (dus gelijk aan crossings, indien n 2 is)
-    # hierdoor kunnen we simpelweg het aantal rijen tellen, en dan hebben we het aantal testen
-    n_sign_tests = nrow(sign_tests)
-    
-    if ("aantal_toetsen" %in% colnames(algemeen) && !is.na(algemeen$aantal_toetsen)) {
-      n_sign_tests = algemeen$aantal_toetsen
-      msg("Let op! Het aantal toetsen voor de multiple testing correction is vanuit de configuratie omgezet van %d naar %d. Als dit niet de bedoeling is, pas dan de configuratie aan.",
-          nrow(sign_tests), n_sign_tests, level=WARN)
-    }
-    
-    if(!is.na(algemeen$multiple_testing_correction)){
-      if (grepl("bh|benjamini|hochberg", algemeen$multiple_testing_correction, T)) {
-        if(n_sign_tests > nrow(sign_tests)){
-          msg("Let op! Het aantal in de configuratie opgegeven toetsen is hoger dan het aantal in dit tabellenboek. Met Benjamini-Hochberg-correctie kan dit vertekende resultaten opleveren.", level=WARN)
-        }
-        pvals = sort(sign_tests$sign)
-        pvals = pvals[!is.na(pvals)]
-        
-        bh.table = matrix(nrow = length(pvals), ncol = 3)
-        bh.table[,1] = pvals
-        bh.table[,2] = (1:n_sign_tests)[1:length(pvals)]
-        bh.table[,3] = (bh.table[,2]/n_sign_tests)*algemeen$confidence_level_orig # berekening Aart
-        
-        if (sum(bh.table[,1] < bh.table[,3]) < 1) {
-          # geen enkele significante waarde
-          algemeen$confidence_level = 1e-20
-          msg("Na Benjamini-Hochberg-correctie is er geen enkele p-waarde significant.", level=WARN)
-        } else {
-          algemeen$confidence_level = max(bh.table[bh.table[,1] < bh.table[,3],1])
-          msg("De gewenste afkapwaarde voor significantie is met Benjamini-Hochberg-correctie op basis van %d toetsen aangepast van %e naar %e.",
-              n_sign_tests, algemeen$confidence_level_orig, algemeen$confidence_level, level=MSG)
-        }
-      } else if (grepl("bf|bonferonni|bonferroni|bonferronni", algemeen$multiple_testing_correction, T)) {
-        algemeen$confidence_level = algemeen$confidence_level / n_sign_tests
-        msg("De gewenste afkapwaarde voor significantie is met Bonferroni-correctie op basis van %d toetsen aangepast van %e naar %e.",
-            n_sign_tests, algemeen$confidence_level_orig, algemeen$confidence_level, level=MSG)
-      } else {
-        msg("Er is geen geldige waarde opgegeven voor multiple_testing_correction. Geldigde waardes zijn 'BH' voor Benjamini-Hochberg of 'bonferroni' voor Bonferroni.", level=ERR)
-      }
-    }
-
-  }
   
   # controleren of de gewenste logo's bestaan - anders kunnen de HTML- en Excel-functies ze niet openen
   if (nrow(logos) > 0) {
@@ -1034,27 +1203,33 @@ log.save = T
     }
   }
   
+  
+  default_alpha = algemeen$confidence_level # Bewaar origineel
+  
   if (!is.na(algemeen$template_html)) {
     # uitdraaien tabellenboeken in HTML-vorm voor digitoegankelijkheid
     source(paste0(dirname(this.path()), "/tbl_MakeHtml.R"))
-    
     template_html = read_file(algemeen$template_html)
     
     if (is.null(subsetmatches)) {
       # geen subsets, 1 tabellenboek
+      alpha_row = mtc_per_subset[is.na(mtc_per_subset$subset), ]
+      algemeen$confidence_level = if(nrow(alpha_row) > 0) alpha_row$corrected_alpha[1] else default_alpha
+      
       msg("Digitoegankelijk tabellenboek wordt gemaakt.", level=MSG)
       MakeHtml(results, var_labels, kolom_opbouw, NA, NA, subsetmatches, n_resp, template_html, filename=basefilename)
     } else {
       # wel subsets, meerdere tabellenboeken
       subsetvals = subsetmatches[, 1]
-      # bij een subset met slechts 1 niveau valt de naam weg bij de bovenstaande selectie
-      # om dit te voorkomen voegen we 'm zelf nog een keer toe
       names(subsetvals) = rownames(subsetmatches)
       for (s in 1:length(subsetvals)) {
-        if (sum(results$subset == colnames(subsetmatches)[1] & results$subset.val == subsetvals[s], na.rm=T) < 1)
-          next # geen data gevonden voor deze subset, overslaan
+        if (sum(results$subset == colnames(subsetmatches)[1] & results$subset.val == subsetvals[s], na.rm=T) < 1) next 
         
-        msg("Digitoegankelijk tabellenboek voor %s wordt gemaakt.", names(subsetvals[s]), level=MSG)
+        # Haal specifieke alpha voor deze subset op uit mtc_per_subset
+        alpha_row = mtc_per_subset[!is.na(mtc_per_subset$subset) & mtc_per_subset$subset == colnames(subsetmatches)[1] & mtc_per_subset$subset.val == subsetvals[s], ]
+        algemeen$confidence_level = if(nrow(alpha_row) > 0) alpha_row$corrected_alpha[1] else default_alpha
+        
+        msg("Digitoegankelijk tabellenboek voor %s wordt gemaakt (alpha: %e).", names(subsetvals[s]), algemeen$confidence_level, level=MSG)
         MakeHtml(results, var_labels, kolom_opbouw, colnames(subsetmatches)[1], subsetvals[s], subsetmatches, n_resp, template_html, filename=paste0(basefilename, " ", names(subsetvals[s])))
       }
     }
@@ -1064,6 +1239,9 @@ log.save = T
   source(paste0(dirname(this.path()), "/tbl_MakeExcel.R"))
   if (is.null(subsetmatches)) {
     # geen subsets, 1 tabellenboek
+    alpha_row = mtc_per_subset[is.na(mtc_per_subset$subset), ]
+    algemeen$confidence_level = if(nrow(alpha_row) > 0) alpha_row$corrected_alpha[1] else default_alpha
+    
     msg("Tabellenboek wordt gemaakt.", level=MSG)
     MakeExcel(results, var_labels, kolom_opbouw, NA, NA, subsetmatches, n_resp, filename=basefilename)
   } else {
@@ -1071,11 +1249,15 @@ log.save = T
     subsetvals = subsetmatches[, 1]
     names(subsetvals) = rownames(subsetmatches)
     for (s in 1:length(subsetvals)) {
-      if (sum(results$subset == colnames(subsetmatches)[1] & results$subset.val == subsetvals[s], na.rm=T) < 1)
-        next # geen data gevonden voor deze subset, overslaan
+      if (sum(results$subset == colnames(subsetmatches)[1] & results$subset.val == subsetvals[s], na.rm=T) < 1) next 
       
-      msg("Tabellenboek voor %s wordt gemaakt.", names(subsetvals[s]), level=MSG)
+      # Haal specifieke alpha voor deze subset op uit mtc_per_subset
+      alpha_row = mtc_per_subset[!is.na(mtc_per_subset$subset) & mtc_per_subset$subset == colnames(subsetmatches)[1] & mtc_per_subset$subset.val == subsetvals[s], ]
+      algemeen$confidence_level = if(nrow(alpha_row) > 0) alpha_row$corrected_alpha[1] else default_alpha
+      
+      msg("Tabellenboek voor %s wordt gemaakt (alpha: %e).", names(subsetvals[s]), algemeen$confidence_level, level=MSG)
       MakeExcel(results, var_labels, kolom_opbouw, colnames(subsetmatches)[1], subsetvals[s], subsetmatches, n_resp, filename=paste0(basefilename, " ", names(subsetvals[s])))
     }
   }
 }
+
