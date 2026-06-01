@@ -89,7 +89,6 @@ log.save = T
   available_sheets <- getSheetNames(config.file)
   
   for (sheet in sheets) {
-    
     if (!sheet %in% available_sheets) {
       if (sheet %in% c("swing_configuraties", "swing_variabelen", "swing_crossings")) {
         msg("Tabblad %s bestaat niet in het configuratiebestand. Dit kan door een fout komen of omdat je met een oude configuratiebestand werkt. De functionaliteit uit dit tabblad wordt waar mogelijk overgeslagen.", sheet, level = WARN)
@@ -221,7 +220,6 @@ log.save = T
   
   # Als swing output wel gemaakt wordt, moeten we nog een aantal dingen checken en aanvullen:
   if (algemeen$swing_output) {
-    
     if (any(!c("swing_configuraties", "swing_variabelen", "swing_crossings") %in% available_sheets)) {
       msg("Er is aangegeven dat er een swing output gemaakt moet worden, maar de benodigde tabbladen swing_configuraties, swing_variabelen, en swing_crossings zijn niet allemaal aanwezig. Controleer de configuratie.", level=ERR)
     }
@@ -236,9 +234,7 @@ log.save = T
     }
     
     if (!"swing_unit" %in% colnames(algemeen)) {
-      
       algemeen$swing_unit <- NA
-      
     }
     
     # Swing_configuraties$gebiedsniveau mag niet leeg zijn
@@ -609,7 +605,7 @@ log.save = T
   for (d in 1:nrow(datasets)) {
     dataset_indexes = which(data$tbl_dataset == d) # welke kolommen in data gaan over dataset d, 'mijn kolommen'?
     strata = data$superstrata[dataset_indexes] # wat zijn de strata van mijn kolommen?
-    unique_strata = sort(unique(strata)) # unique strata
+    unique_strata = sort(unique(strata)) 
     if("fpc" %in% colnames(datasets) && !is.na(datasets$fpc[d])){
       if(is.na(datasets$stratum[d])){stop("Bij FPC is het verplicht een stratum op te geven.")}
       fpc_data <- table(strata) %>%
@@ -618,11 +614,11 @@ log.save = T
         rename(stratum = strata)
       if(file.exists(datasets$fpc[d])){
         # als het een pad is: zoek de fpc data op en berekenen sampling prob per stratum
-        fpc_data <- fpc_data %>% left_join(
-          read.xlsx(datasets$fpc[d]) %>% 
-            mutate(stratum = as.factor(stratum)),
-          join_by(stratum == stratum)
-        ) %>% 
+        fpc_data <- fpc_data %>%
+          left_join(
+            read.xlsx(datasets$fpc[d]) %>% 
+              mutate(stratum = as.factor(stratum)),
+            by="stratum") %>% 
           mutate(fpc = populatiegrootte)
       } else if(grepl("GROOTGEWICHT_", datasets$fpc[d])){
         if(is.na(datasets$stratum[d])){stop("Bij FPC is het verplicht een stratum op te geven.")}
@@ -636,9 +632,7 @@ log.save = T
               summarise(populatiegrootte = sum(!!sym(gsub("GROOTGEWICHT_", "", datasets$fpc[d])), na.rm = TRUE)), 
             join_by(stratum == superstrata)
           ) %>% 
-          mutate(
-            fpc = populatiegrootte
-          )
+          mutate(fpc = populatiegrootte)
         
       } else if(datasets$fpc[d] %in% colnames(data)){
         # als de fpc correctiefactor gewoon een kolom is, dan die overnemen
@@ -648,12 +642,8 @@ log.save = T
         msg("FPC is aangegeven maar onbekende FPC kolom input '%s'. Zie handleiding voor opties.", datasets$fpc[d], level=ERR)
       }
       # merge zodat we voor elke respondent een sampling prob hebben
-      fpc_per_respondent <- data.frame(
-        stratum = strata
-      ) %>% left_join(
-        fpc_data,
-        join_by(stratum == stratum)
-      )
+      fpc_per_respondent <- data.frame(stratum = strata) %>%
+        left_join(fpc_data, by="stratum")
       is_small_strata <- fpc_per_respondent$Freq >= fpc_per_respondent$populatiegrootte
       if(any(is.na(fpc_per_respondent$stratum))){
         msg("Er bevinden zich %s respondenten met een missend strata in de dataset. Deze worden niet meegenomen in de weging.", sum(is.na(fpc_per_respondent$stratum)), level=MSG)

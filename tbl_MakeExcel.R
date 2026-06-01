@@ -398,9 +398,7 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
       
       # dichotoom? zo ja, alleen 1 (= ja) laten zien en geen kop met de vraag
       # zo nee, kop met de vraag en alle waardes laten zien
-      is_dich = any(data.var$is_dichotoom, na.rm = TRUE)
-      
-      if (is_dich) {
+      if (any(data.var$is_dichotoom, na.rm = TRUE)) {
         output = output %>% as.data.frame() %>% rownames_to_column("val") %>% filter(val == 1) %>%
           mutate(label=var_labels$label[var_labels$var == indeling_rijen$inhoud[i] & var_labels$val == "var"],
                  matchcode=paste0(indeling_rijen$inhoud[i], val)) %>%
