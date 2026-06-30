@@ -243,18 +243,12 @@ log.save = T
           str_c(which(is.na(swing_configuraties$gebiedsniveau)), collapse=", "), level=ERR)
     }
     
-    # Swing_configuratie tbl_dataset toevoegen als rijnummer van datasets,
-    # om dit later te kunnen gebruiken bij het bouwen van de swing data als filter
-    # (Alternatief zou zijn de dataset_naam aan data toe te voegen)
-    replace_empty_with_na <- function(x) {if (length(x) == 0) return(NA_integer_) else return(x)}
-    swing_configuraties <- swing_configuraties |> 
-      rowwise() |> 
-      mutate(
-        tbl_dataset = replace_empty_with_na(which(datasets$naam_dataset == naam_dataset))
-      ) |> 
-      ungroup()
-    
-    swing_configuraties <- left_join(swing_configuraties, datasets, by = "naam_dataset")
+    # Swing_configuratie koppelen aan datasetinformatie via left_join.
+    swing_configuraties <- left_join(
+      swing_configuraties,
+      datasets,
+      by = "naam_dataset"
+    )
     
   }
   
@@ -505,8 +499,9 @@ log.save = T
       }
     }
     
-    data[,"tbl_dataset"] = d
-    data.combined = bind_rows(data.combined, data)
+    data[, "tbl_dataset"] <- d
+    data[, "tbl_naam_dataset"] <- datasets$naam_dataset[d]
+    data.combined <- bind_rows(data.combined, data)
     
     # bind_rows haalt soms willekeurig labels weg, dus die moeten we handmatig terugzetten
     for (c in 1:ncol(data)) {

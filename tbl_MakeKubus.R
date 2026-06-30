@@ -153,7 +153,7 @@ MaakKubusData <- function(
     filter(!(geen_crossings == FALSE & crossings == dummy_crossing_var))
   
   # Pre-split data per dataset om herhaalde filtering te vermijden (performance optimalisatie)
-  data_by_dataset <- split(data, data$tbl_dataset)
+  data_by_dataset <- split(data, data$tbl_naam_dataset)
   
   # Pre-cache labels voor variabelen en crossings (performance optimalisatie)
   var_labels_cache <- lapply(stats::setNames(vars, vars), function(v) {
@@ -217,11 +217,14 @@ MaakKubusData <- function(
       } else if (!is.null(args[[global_col]]) && !is.na(args[[global_col]])) {
         current_weegfactor <- args[[global_col]]
       }
-      
-      
-      
+
+      # Fallback: als geen weegfactor is opgegeven, gebruik tbl_weegfactor (default gewicht = 1).
+      if (is.null(current_weegfactor) || is.na(current_weegfactor)) {
+        current_weegfactor <- "tbl_weegfactor"
+      }
+
       # Gebruik pre-split data voor snellere toegang (vermijdt herhaalde filtering)
-      kubusdata <- data_by_dataset[[as.character(args$tbl_dataset)]]
+      kubusdata <- data_by_dataset[[args$naam_dataset]]
       if (is.null(kubusdata) || nrow(kubusdata) == 0) return()
       kubusdata <- kubusdata |> 
         mutate(geolevel = args$gebiedsniveau)
