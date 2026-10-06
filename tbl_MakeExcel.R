@@ -310,7 +310,7 @@ MakeExcel = function (results, var_labels, col.design, subset, subset.val, subse
           data.var = bind_rows(data.var, data.tmp)
         }
       }
-      
+
       n_var = data.var %>%
         group_by(col.index) %>%
         summarize(n=sum(n.unweighted, na.rm=T)) %>%

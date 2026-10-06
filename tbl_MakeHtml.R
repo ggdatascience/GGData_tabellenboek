@@ -114,6 +114,9 @@ BuildHtmlTableRows = function (input, col.design, n=F) {
       if (val == A_EXACTZERO) {
         val = sprintf("%s%s", ifelse(n, "n=", ""), "0")
         htmlclass = c(htmlclass, "antwoord_exact_nul")
+      } else if(val == A_EXACTHUNDRED){
+        val = sprintf("%s%s", ifelse(n, "n=", ""), "100")
+        htmlclass = c(htmlclass, "antwoord_exact_nul")
       } else if (val == A_TOOSMALL) {
         val = algemeen$tekst_min_antwoord_niet_gehaald
         htmlclass = c(htmlclass, "antwoord_niet_gehaald")

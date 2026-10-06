@@ -19,6 +19,7 @@ A_TOOSMALL = -1  # antwoordcategorie te klein of onder afkapwaarde
 Q_TOOSMALL = -2  # hele vraag te weinig respondenten
 Q_MISSING  = -3  # vraag geheel afwezig / verborgen crossing
 A_EXACTZERO = -4 # exact nul procent
+A_EXACTHUNDRED = -5 # exact honder procent
 
 # functie om (fout)meldingen weer te geven
 # middels het level kunnen verschillende niveau's worden aangegeven, waarbij een lager niveau
@@ -136,7 +137,7 @@ add_dichotoom_flags = function (results, dichotoom, niet_dichotoom, algemeen) {
     mutate(
       is_dichotoom = if_else(
         coalesce(is_dichotoom, FALSE),
-        !is.na(val) & suppressWarnings(as.numeric(val)) == 1,
+        !is.na(val) & suppressWarnings(as.numeric(val))%in% 0:1, # was == 1
         FALSE
       )
     )
@@ -274,6 +275,8 @@ add_suppression_flags <- function(results, algemeen, indeling_rijen) {
         n_question < algemeen$min_observaties_per_vraag                           ~ Q_TOOSMALL,
         # Celniveau: exact nul (vóór de n.unweighted check, want n=0 impliceert perc=0)
         perc.weighted == 0                                                        ~ A_EXACTZERO,
+        # Celniveau: exact honderd (vóór de n.unweighted check, want n=0 impliceert perc=0)
+        perc.weighted == 100                                                      ~ A_EXACTHUNDRED,
         # Kolomniveau: een antwoord te klein én config zegt hele vraag onderdrukken
         any_answer_toosmall & algemeen$vraag_verbergen_bij_missend_antwoord       ~ A_TOOSMALL,
         # Celniveau: dit specifieke antwoord te weinig respondenten
@@ -286,7 +289,7 @@ add_suppression_flags <- function(results, algemeen, indeling_rijen) {
     # var_suppressed: TRUE als de variabele als geheel onderdrukt is
     # A_EXACTZERO (-4) telt hierbij niet mee als onderdrukking
     group_by(dataset, subset, subset.val, year, crossing, var, val) %>%
-    mutate(var_suppressed = !all(suppression == 0 | suppression == A_EXACTZERO)) %>%
+    mutate(var_suppressed = !all(suppression == 0 | suppression == A_EXACTZERO | suppression == A_EXACTHUNDRED)) %>%
     ungroup() %>%
     # Tijdelijke hulpkolommen opruimen
     select(-all_na, -any_answer_toosmall, -verberg_crossings)

@@ -471,7 +471,6 @@ GetTableRow = function (var, design, col.design, subsetmatches) {
                                               n.unweighted=as.numeric(unname(unweighted)), perc.unweighted=proportions(as.numeric(unname(unweighted)))*100))
     }
   }
-  
-  
+
   return(results)
 }

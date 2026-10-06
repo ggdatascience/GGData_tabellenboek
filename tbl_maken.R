@@ -1032,6 +1032,13 @@ log.save = T
 
       t.before = proc.time()["elapsed"]
       results_list[[i]] = GetTableRow(var, design, kolom_opbouw, subsetmatches)
+      # als alles NA is in een var, dan placeholder pakken om in elk geval streepjes te krijgen.
+      if(nrow(results_list[[i]]) == 0){
+        message("sorry")
+        results_list[[i]] <- results_list[[1]] %>% 
+          filter(val == 1) %>% 
+          mutate(var = varlist$inhoud[i], perc.weighted = 0, n.unweighted = 0, n.weighted = 0, perc.unweighted = 0)
+      }
       t.after = proc.time()["elapsed"]
       t.vars = c(t.vars, t.after - t.before)
 
