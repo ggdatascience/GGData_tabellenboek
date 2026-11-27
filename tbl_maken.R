@@ -84,13 +84,13 @@ log.save = T
   # daadwerkelijk inlezen configuratie
   # TODO: onmogelijke waardes checken
   sheets = c("algemeen", "crossings", "datasets", "indeling_rijen", "onderdelen", "opmaak", "labelcorrectie", "logos", "intro_tekst", "headers_afkortingen",
-             "dichotoom", "niet_dichotoom", "forceer_datatypen", "swing_configuraties", "swing_variabelen", "swing_crossings")
+             "dichotoom", "niet_dichotoom", "forceer_datatypen", "standaardisatie", "swing_configuraties", "swing_variabelen", "swing_crossings")
   
   available_sheets <- getSheetNames(config.file)
   
   for (sheet in sheets) {
     if (!sheet %in% available_sheets) {
-      if (sheet %in% c("swing_configuraties", "swing_variabelen", "swing_crossings")) {
+      if (sheet %in% c("swing_configuraties", "swing_variabelen", "swing_crossings", "standaardisatie")) {
         msg("Tabblad %s bestaat niet in het configuratiebestand. Dit kan door een fout komen of omdat je met een oude configuratiebestand werkt. De functionaliteit uit dit tabblad wordt waar mogelijk overgeslagen.", sheet, level = WARN)
       } else {
         msg("Tabblad %s bestaat niet in het configuratiebestand. Voeg deze toe volgens de specificaties in de handleiding.", sheet, level = ERR)
@@ -209,6 +209,12 @@ log.save = T
   if (sum(opmaak$type == "naam_tabellenboek") == 0) {
     opmaak = rbind(opmaak, data.frame(type="naam_tabellenboek", waarde="Overzicht"))
   }
+  
+  # standaardisatie is later toegevoegd bij onderdelen en staat standaard uit
+  if (!"standaardisatie" %in% colnames(onderdelen)) {
+    onderdelen$standaardisatie = F
+  }
+  onderdelen$standaardisatie[is.na(onderdelen$standaardisatie)] = F
   
   # swing verwerking is later toegevoegd, dus uit gaan van niet bij geen waarde
   if (!"swing_output" %in% colnames(algemeen)) {
@@ -705,12 +711,34 @@ log.save = T
         str_c(required.vars[!required.vars %in% colnames(data)], collapse=", "), level=ERR)
   }
   
+  # standaardisatielogica uitwerken
+  if (nrow(standaardisatie) > 0) {
+    if (any(!standaardisatie$crossing %in% crossings)) {
+      msg("Fout bij het inlezen van de standaardisatieconfiguratie: de variabele(n) %s zijn geen crossings.",
+          str_c(setdiff(standaardisatie$crossing, crossings), collapse=", "), level=ERR)
+    }
+    
+    # toegestane waarden in de kolom waarde zijn volledige labelmatches, of waardematches
+    standaardisatie$val = str_extract(standaardisatie$waarde, "\\d+")
+    standaardisatie$val[is.na(standaardisatie$val)] = sapply(which(is.na(standaardisatie$val)), \(r) {
+      as.numeric(var_labels$val[var_labels$var == standaardisatie$crossing[r] & var_labels$label == standaardisatie$waarde[r]])
+    })
+    standaardisatie$n = standaardisatie$populatie
+    standaardisatie$n[standaardisatie$n == "subset"] = -1
+    standaardisatie$n = as.numeric(standaardisatie$n)
+    
+    if (any(is.na(standaardisatie$val)) || any(is.na(standaardisatie$n))) {
+      msg("Fout bij het inlezen van de standaardisatieconfiguratie: Er is een onjuiste waarde of populatie opgegeven in rij(en) %s.",
+          str_c(which(is.na(standaardisatie$val) | is.na(standaardisatie$n)), collapse=", "), level=ERR)
+    }
+  }
   
   msg("Datasets gecombineerd. Start verwerking kolomopbouw.", level=DEBUG)
   
   # door de onderdelen loopen en die verwerken
   kolom_opbouw = data.frame()
   test.col.cache = data.frame()
+  std.col.cache = data.frame()
   for (i in 1:nrow(onderdelen)) {
     if (!(onderdelen$dataset[i] %in% datasets$naam_dataset)) {
       msg("Onderdeel %d (dataset %s, subset %s) bevat een ongeldige datasetnaam. Uitvoering gestopt.",
@@ -749,7 +777,8 @@ log.save = T
         kolom_opbouw = bind_rows(kolom_opbouw, data.frame(col.index=nrow(kolom_opbouw)+(1:n), dataset=rep(d, n),
                                                           subset=rep(onderdelen$subset[i], n), year=rep(onderdelen$jaar[i], n),
                                                           crossing=rep(crossing, n), crossing.val=as.numeric(crossing.labels$val),
-                                                          crossing.lab=crossing.labels$label, test.col=rep(test.col.current, n), test.display=T))
+                                                          crossing.lab=crossing.labels$label, test.col=rep(test.col.current, n), test.display=T,
+                                                          standardize=onderdelen$standaardisatie[i], internal=F))
       }
     }
     
@@ -770,9 +799,24 @@ log.save = T
       test.col = NA
     }
     
+    # voor het standaardiseren is een splitsing met crossings nodig, maar deze worden niet berekend als met_crossing == ONWAAR
+    # daarom voegen we ze stiekem naderhand toe
+    if (onderdelen$standaardisatie[i] && !onderdelen$met_crossing[i]) {
+      for (crossing in crossings) {
+        crossing.labels = var_labels[var_labels$var == crossing & var_labels$val != "var",]
+        n = nrow(crossing.labels)
+        
+        std.col.cache = bind_rows(std.col.cache,
+                                  data.frame(dataset=rep(d, n),
+                                             subset=rep(onderdelen$subset[i], n), year=rep(onderdelen$jaar[i], n),
+                                             crossing=rep(crossing, n), crossing.val=as.numeric(crossing.labels$val),
+                                             crossing.lab=crossing.labels$label, test.col=NA, test.display=T))
+      }
+    }
+    
     kolom_opbouw = bind_rows(kolom_opbouw, data.frame(col.index=nrow(kolom_opbouw)+1, dataset=d, subset=onderdelen$subset[i], year=onderdelen$jaar[i],
                                                       crossing=NA, crossing.val=NA, crossing.lab=NA, test.col=test.col, test.display=!onderdelen$sign_doelkolom[i],
-                                                      name=onderdelen$kolomnaam[i]))
+                                                      name=onderdelen$kolomnaam[i], standardize=onderdelen$standaardisatie[i], internal=F))
     
     kolom_opbouw$test.col[kolom_opbouw$test.col == -1] = nrow(kolom_opbouw)
   }
@@ -783,6 +827,18 @@ log.save = T
       # de laatste kolom uit de dataset is altijd totaal, dus hoogste waarde is direct de juiste kolom
       kolom_opbouw$test.col[test.col.cache$col.index[i]] = max(which(kolom_opbouw$dataset == which(datasets$naam_dataset == test.col.cache$test.col[i])))
     }
+  }
+  
+  # en crossingskolommen voor standaardisatie?
+  if (nrow(std.col.cache) > 0) {
+    # alleen kolommen die nog niet voorkomen, om dubbel rekenen te voorkomen
+    std.col.cache = std.col.cache %>%
+      left_join(kolom_opbouw %>% select(col.index, dataset, subset, year, crossing, crossing.val), by=c("dataset", "subset", "year", "crossing", "crossing.val")) %>%
+      filter(is.na(col.index))
+    
+    std.col.cache$col.index = seq(nrow(kolom_opbouw)+1, nrow(kolom_opbouw)+nrow(std.col.cache), 1)
+    std.col.cache$internal = T
+    kolom_opbouw = bind_rows(kolom_opbouw, std.col.cache)
   }
   
   # dummyvariabelen maken voor iedere kolom
@@ -1066,6 +1122,13 @@ log.save = T
   # Staat bewust NA het cachen van results zodat configuratiewijzigingen altijd effect hebben.
   results = add_dichotoom_flags(results, dichotoom, niet_dichotoom, algemeen)
   results = add_suppression_flags(results, algemeen, indeling_rijen)
+  
+  # Herberekenen o.b.v. standaardisatie? Zo ja; uitvoeren voor multiple testing correction.
+  results$std.calc = F
+  results$n.pop.std = NA
+  results$n.std = NA
+  
+  results = standardize_results(results, kolom_opbouw, standaardisatie)
 
   mtc_method <- if ("multiple_testing_correction" %in% colnames(algemeen)) as.character(algemeen$multiple_testing_correction) else NA_character_
   base_alpha <- if ("confidence_level" %in% colnames(algemeen)) as.numeric(algemeen$confidence_level) else NA_real_
@@ -1217,7 +1280,7 @@ log.save = T
       algemeen$confidence_level = if(nrow(alpha_row) > 0) alpha_row$corrected_alpha[1] else default_alpha
       
       msg("Digitoegankelijk tabellenboek wordt gemaakt.", level=MSG)
-      MakeHtml(results, var_labels, kolom_opbouw, NA, NA, subsetmatches, n_resp, template_html, filename=basefilename)
+      MakeHtml(results, var_labels, kolom_opbouw[!kolom_opbouw$internal,], NA, NA, subsetmatches, n_resp, template_html, filename=basefilename)
     } else {
       # wel subsets, meerdere tabellenboeken
       subsetvals = subsetmatches[, 1]
@@ -1230,7 +1293,7 @@ log.save = T
         algemeen$confidence_level = if(nrow(alpha_row) > 0) alpha_row$corrected_alpha[1] else default_alpha
         
         msg("Digitoegankelijk tabellenboek voor %s wordt gemaakt (alpha: %e).", names(subsetvals[s]), algemeen$confidence_level, level=MSG)
-        MakeHtml(results, var_labels, kolom_opbouw, colnames(subsetmatches)[1], subsetvals[s], subsetmatches, n_resp, template_html, filename=paste0(basefilename, " ", names(subsetvals[s])))
+        MakeHtml(results, var_labels, kolom_opbouw[!kolom_opbouw$internal,], colnames(subsetmatches)[1], subsetvals[s], subsetmatches, n_resp, template_html, filename=paste0(basefilename, " ", names(subsetvals[s])))
       }
     }
   }
@@ -1256,7 +1319,7 @@ log.save = T
       algemeen$confidence_level = if(nrow(alpha_row) > 0) alpha_row$corrected_alpha[1] else default_alpha
       
       msg("Tabellenboek voor %s wordt gemaakt (alpha: %e).", names(subsetvals[s]), algemeen$confidence_level, level=MSG)
-      MakeExcel(results, var_labels, kolom_opbouw, colnames(subsetmatches)[1], subsetvals[s], subsetmatches, n_resp, filename=paste0(basefilename, " ", names(subsetvals[s])))
+      MakeExcel(results, var_labels, kolom_opbouw[!kolom_opbouw$internal,], colnames(subsetmatches)[1], subsetvals[s], subsetmatches, n_resp, filename=paste0(basefilename, " ", names(subsetvals[s])))
     }
   }
 }

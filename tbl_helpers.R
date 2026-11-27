@@ -291,3 +291,143 @@ add_suppression_flags <- function(results, algemeen, indeling_rijen) {
     # Tijdelijke hulpkolommen opruimen
     select(-all_na, -any_answer_toosmall, -verberg_crossings)
 }
+
+# Het omschrijven van resultaten naar gestandaardiseerde cijfers kost wat werk.
+# De truc is om de totaalkolommen, waar gewenst, opnieuw te berekenen o.b.v de onderliggende crossings
+# en vervolgens de toetsing (indien gewenst) opnieuw uit te voeren.
+# TODO: Toetsing op n van doelpopulatie of bronpopulatie?
+standardize_results = function (results, col.design, std) {
+  if (!any(col.design$standardize)) return(results)
+  
+  msg("Start herberekenen resultaten o.b.v standaardisatie.", level=DEBUG)
+  
+  results$perc.weighted.old = results$perc.weighted
+  
+  # kolomnamen herschrijven om de merge() zometeen makkelijker te maken
+  std = std[,c("crossing", "val", "n")]
+  colnames(std)[2] = "crossing.val"
+  
+  if (is.null(subsetmatches) || !any(std$n == -1)) {
+    # geen subsets, of geen populatie per subset; herberekening 1x
+    results = standardize_results_subset(results, col.design, NA, NA, std)
+  } else {
+    # wel subsets, doorlopen per tabellenboek
+    subsetvals = subsetmatches[, 1]
+    names(subsetvals) = rownames(subsetmatches)
+    for (s in 1:length(subsetvals)) {
+      if (sum(results$subset == colnames(subsetmatches)[1] & results$subset.val == subsetvals[s], na.rm=T) < 1) next 
+      
+      results = standardize_results_subset(results, col.design, colnames(subsetmatches)[1], subsetvals[s], std)
+    }
+  }
+  
+  msg("Herberekening afgerond. %d waarden opnieuw berekend.", sum(results$std.calc))
+}
+
+# daadwerkelijke herberekening van de resultaten
+standardize_results_subset = function (results, col.design, subset, subset.val, std) {
+  for (i in 1:nrow(std)) {
+    if (std$n[i] != -1) next
+    
+    # n = base wordt -1 in de code, dus deze moeten we vervangen door het aantal deelnemers in deze subset
+    # dit is het makkelijkste te doen door de eerste kolom te nemen waarin deze crossing wordt weergegeven
+    col.index = which(col.design$crossing == std$crossing[i] & col.design$crossing.val == std$crossing.val[i] & !col.design$internal) |>
+      first()
+    std$n[i] = n_resp$n[which(n_resp$col == col.index & n_resp$crossing == std$crossing[i] & n_resp$subset == subset.val)]
+  }
+  
+  subset.name = names(subset.val)
+  subset.val = unname(subset.val)
+  
+  for (i in which(col.design$standardize)) {
+    if (!col.design$standardize[i]) next
+    
+    printf("Kolomverwerking voor kolom %d", i)
+    
+    subset.col = NA
+    if (!is.na(col.design$subset[i])) {
+      subset.col = subset.val
+      if (col.design$subset[i] != subset) {
+        subset.col = subsetmatches[subsetmatches[,1] == subset.val, col.design$subset[i]]
+      }
+    }
+    
+    selection = NA.identical(results$dataset, col.design$dataset[i]) & NA.identical(results$subset, col.design$subset[i]) &
+      NA.identical(results$subset.val, subset.col) & NA.identical(results$year, col.design$year[i])
+    
+    col.total = which(selection & is.na(results$crossing) & NA.identical(results$sign.vs, col.design$test.col[i]))
+    
+    for (c in col.total) {
+      # het trucje is vrij makkelijk, alleen het terugvinden van de data is ingewikkeld
+      # we willen [perc crossing1] * [gewenste n1] + [perc crossing2] * [gewenste n2] + ... / [totaal gewenste n] doen
+      printf("  Totaalkolom voor subset %s (%s), jaar %d: was %.2f", results$subset[c], results$subset.val[c], results$year[c], results$perc.weighted[c])
+      
+      base_data = results[which(selection & results$var == results$var[c] & results$val == results$val[c] & !is.na(results$crossing)),]
+      base_data = merge(base_data, std, by=c("crossing", "crossing.val"), all.y=T)
+      # missende waardes zijn niet aanwezig in results; hiervoor kunnen we 0 aannemen als percentage, want 0*n = 0
+      base_data$perc.weighted[is.na(base_data$perc.weighted)] = 0
+      # [perc1] * [gewenste n1] ... (n is afkomstig uit standaardisatie)
+      base_data$n.std = base_data$perc.weighted / 100 * base_data$n
+      results$perc.weighted[c] = sum(base_data$n.std) / sum(base_data$n) * 100
+      results$n.pop.std[c] = sum(base_data$n)
+      results$n.std[c] = sum(base_data$n.std)
+      # significantie moeten we opnieuw berekenen na afloop
+      results$sign[c] = NA
+      results$std.calc[c] = T
+      printf("  > Nieuwe berekening: %s / %s = %.1f",
+             str_c(paste0("[", base_data$perc.weighted, " (perc) * ", base_data$n, " (n) =] ", base_data$n.std, " (n.std voor ", base_data$crossing, " - ", base_data$crossing.val, ")"), collapse=" + "),
+             str_c(paste0(base_data$n, " (", base_data$crossing, " - ", base_data$crossing.val, ")"), collapse=" + "),
+             results$perc.weighted[c])
+    }
+  }
+  
+  # nu voor alles wat een significantie nodig heeft weer een nieuwe berekenen
+  for (i in which(col.design$standardize & !is.na(col.design$test.col))) {
+    subset.col = NA
+    if (!is.na(col.design$subset[i])) {
+      subset.col = subset.val
+      if (col.design$subset[i] != subset) {
+        subset.col = subsetmatches[subsetmatches[,1] == subset.val, col.design$subset[i]]
+      }
+    }
+    
+    subset.col.against = NA
+    if (!is.na(col.design$subset[col.design$test.col[i]])) {
+      subset.col.against = subset.val
+      if (col.design$subset[col.design$test.col[i]] != subset) {
+        subset.col.against = subsetmatches[subsetmatches[,1] == subset.val, col.design$subset[col.design$test.col[i]]]
+      }
+    }
+    
+    selection = NA.identical(results$dataset, col.design$dataset[i]) & NA.identical(results$subset, col.design$subset[i]) &
+      NA.identical(results$subset.val, subset.col) & NA.identical(results$year, col.design$year[i]) &
+      is.na(results$crossing) & # alleen totaalkolommen
+      NA.identical(results$sign.vs, col.design$test.col[i]) & is.na(results$sign) # results$sign is hierboven gereset voor de bewerkte cijfers
+    
+    selection.against = NA.identical(results$dataset, col.design$dataset[col.design$test.col[i]]) &
+      NA.identical(results$subset, col.design$subset[col.design$test.col[i]]) &
+      NA.identical(results$subset.val, subset.col.against) & NA.identical(results$year, col.design$year[col.design$test.col[i]]) &
+      is.na(results$crossing) & # alleen totaalkolommen
+      NA.identical(results$sign.vs, col.design$test.col[col.design$test.col[i]])
+    
+    base_data = results[which(selection),]
+    against = results[which(selection.against),]
+    
+    if (nrow(base_data) == 0) next
+    
+    for (r in 1:nrow(base_data)) {
+      against_row = against[which(against$var == base_data$var[r] & against$val == base_data$val[r]),]
+      if (nrow(against_row) != 1) browser()
+      n_pos = against_row$n.weighted
+      n_neg = (against_row$n.weighted/against_row$perc.weighted*100) - n_pos
+      if (!is.na(against_row$n.std)) {
+        n_pos = against_row$n.std
+        n_neg = against_row$n.pop.std - n_pos
+      }
+      
+      test = chisq.test(matrix(c(base_data$n.std[r], base_data$n.pop.std[r] - base_data$n.std[r], n_pos, n_neg), nrow=2, ncol=2))
+    }
+  }
+  
+  return(results)
+}

@@ -533,7 +533,8 @@ MakeHtml = function (results, var_labels, col.design, subset, subset.val, subset
         vals = as.character(data.var$val[data.var$col.index == col.design$col.index[j] & data.var$val %in% rownames(output)])
         output[vals,j] = data.var$perc.weighted[data.var$col.index == col.design$col.index[j] & data.var$val %in% rownames(output)]
         if (!is.null(algemeen$weergave) && algemeen$weergave == "n")
-          output[vals,j] = data.var$n[data.var$col.index == col.design$col.index[j] & data.var$val %in% rownames(output)]
+          output[vals,j] = data.var$n.unweighted[data.var$col.index == col.design$col.index[j] & data.var$val %in% rownames(output)]
+          
         
         # onderdrukking toepassen
         # onderdrukking toepassen op basis van vooraf berekende suppression-kolom
